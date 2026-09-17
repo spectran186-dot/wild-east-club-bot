@@ -217,16 +217,55 @@ class Database:
             )
 
     def create_demo_events(self):
+        demo_date = "2026-09-20"
+        demo_time = "10:00-13:00"
+        demo_price = 2500
+
         with self._connect() as connection:
             count = connection.execute("SELECT COUNT(*) FROM events").fetchone()[0]
-            if count:
+
+            if count == 0:
+                connection.execute(
+                    """
+                    INSERT INTO events
+                    (route_id, event_date, event_time, price, max_places, free_places, meeting_point)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (1, demo_date, demo_time, demo_price, 10, 10, "Переяславка"),
+                )
                 return
 
-            connection.execute(
+            # Обновляем только старую встроенную демо-запись,
+            # если на неё ещё никто не записывался.
+            old_demo = connection.execute(
                 """
-                INSERT INTO events
-                (route_id, event_date, event_time, price, max_places, free_places, meeting_point)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (1, "2026-08-30", "10:00-13:00", 2500, 10, 10, "Переяславка"),
-            )
+                SELECT id
+                FROM events
+                WHERE route_id = 1
+                  AND event_date = '2026-08-30'
+                  AND event_time = '10:00-13:00'
+                LIMIT 1
+                """
+            ).fetchone()
+
+            if old_demo:
+                booking_count = connection.execute(
+                    "SELECT COUNT(*) FROM bookings WHERE event_id = ?",
+                    (old_demo[0],),
+                ).fetchone()[0]
+
+                if booking_count == 0:
+                    connection.execute(
+                        """
+                        UPDATE events
+                        SET event_date = ?,
+                            event_time = ?,
+                            price = ?,
+                            max_places = 10,
+                            free_places = 10,
+                            meeting_point = 'Переяславка',
+                            status = 'active'
+                        WHERE id = ?
+                        """,
+                        (demo_date, demo_time, demo_price, old_demo[0]),
+                    )
