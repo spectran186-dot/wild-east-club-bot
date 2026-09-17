@@ -1,12 +1,17 @@
-from aiogram import Router
+import asyncio
+
+from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+from config import config
 from database import Database
+
+
 db = Database()
 router = Router()
-
-ADMIN_ID = 323262204
+ADMIN_ID = config.owner_id
 
 
 def admin_keyboard():
@@ -28,13 +33,14 @@ def admin_keyboard():
     )
 
 
+def is_admin(user_id: int) -> bool:
+    return user_id == ADMIN_ID
+
+
 @router.message(Command("admin"))
 async def admin_panel(message: Message):
-
-    if message.from_user.id != ADMIN_ID:
-        await message.answer(
-            "⛔ У вас нет доступа к административной панели."
-        )
+    if not is_admin(message.from_user.id):
+        await message.answer("⛔ У вас нет доступа к административной панели.")
         return
 
     await message.answer(
@@ -43,26 +49,23 @@ async def admin_panel(message: Message):
         reply_markup=admin_keyboard()
     )
 
-@router.callback_query(lambda callback: callback.data == "admin_bookings")
-async def admin_bookings(callback: CallbackQuery):
 
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer(
-            "⛔ Нет доступа",
-            show_alert=True
-        )
+@router.callback_query(F.data == "admin_bookings")
+async def admin_bookings(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    bookings = db.get_bookings()
+    # Подтверждаем нажатие сразу, чтобы Telegram не показывал зависшую кнопку.
+    await callback.answer()
+
+    bookings = await asyncio.to_thread(db.get_bookings)
 
     if not bookings:
-        await callback.message.answer(
-            "📋 Заявок пока нет."
-        )
-        await callback.answer()
+        await callback.message.answer("📋 Заявок пока нет.")
         return
 
-    text = "📋 <b>Заявки</b>\n\n"
+    lines = ["📋 <b>Заявки</b>", ""]
 
     for booking in bookings:
         (
@@ -75,40 +78,39 @@ async def admin_bookings(callback: CallbackQuery):
             route_title
         ) = booking
 
-        text += (
-            f"🆔 Заявка №{booking_id}\n"
-            f"👤 {full_name}\n"
-            f"📞 +{phone}\n"
-            f"📅 {event_date}  {event_time}\n"
-            f"🛶 {route_title}\n"
-            f"🕐 Создана: {created_at}\n"
-            f"──────────────\n"
+        lines.extend([
+            f"🆔 Заявка №{booking_id}",
+            f"👤 {full_name}",
+            f"📞 +{phone}",
+            f"📅 {event_date}  {event_time}",
+            f"🛶 {route_title}",
+            f"🕐 Создана: {created_at}",
+            "──────────────",
+        ])
+
+    text = "\n".join(lines)
+
+    # Telegram ограничивает сообщение 4096 символами.
+    for start in range(0, len(text), 4000):
+        await callback.message.answer(
+            text[start:start + 4000],
+            parse_mode="HTML"
         )
 
-    await callback.message.answer(
-        text,
-        parse_mode="HTML"
-    )
+
+@router.callback_query(F.data == "admin_events")
+async def admin_events(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
 
     await callback.answer()
 
-@router.callback_query(lambda callback: callback.data == "admin_events")
-async def admin_events(callback: CallbackQuery):
-
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer(
-            "⛔ Нет доступа",
-            show_alert=True
-        )
-        return
-
-    events = db.get_events()
-
+    events = await asyncio.to_thread(db.get_events)
     keyboard = []
 
     for event in events:
         event_id, route_id, event_date, event_time, price = event
-
         keyboard.append([
             InlineKeyboardButton(
                 text=f"✏️ {event_date} {event_time}",
@@ -127,10 +129,30 @@ async def admin_events(callback: CallbackQuery):
         "📅 <b>Управление мероприятиями</b>\n\n"
         "Выберите мероприятие для редактирования "
         "или создайте новое:",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=keyboard
-        ),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode="HTML"
     )
 
-    await callback.answer()
+
+@router.callback_query(F.data.startswith("edit_event_"))
+async def edit_event_placeholder(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    await callback.answer(
+        "✏️ Редактирование мероприятий пока не реализовано.",
+        show_alert=True
+    )
+
+
+@router.callback_query(F.data == "add_event")
+async def add_event_placeholder(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    await callback.answer(
+        "➕ Создание мероприятий пока не реализовано.",
+        show_alert=True
+    )
