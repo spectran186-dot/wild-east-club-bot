@@ -7,6 +7,7 @@ from aiogram.types import BotCommand
 import config
 import database
 from handlers import admin
+from handlers.admin_event import router as admin_event_router
 from handlers.start import router as start_router
 from handlers.menu import router as menu_router
 from handlers.booking import router as booking_router
@@ -21,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 
 async def on_error(event):
-    """Log unhandled handler errors without stopping polling."""
     logger.exception("Unhandled bot error: %s", event.exception)
 
 
@@ -38,10 +38,6 @@ async def main():
     await db.create_demo_events()
 
     bot = Bot(config.config.bot_token)
-
-    # Не обрабатываем старые сообщения и нажатия, накопившиеся пока бот
-    # был выключен. Это особенно важно для inline-кнопок: старые callback
-    # query больше не должны приходить пачкой после перезапуска.
     await bot.delete_webhook(drop_pending_updates=True)
 
     dp = Dispatcher()
@@ -50,6 +46,9 @@ async def main():
     dp.include_router(start_router)
     dp.include_router(menu_router)
     dp.include_router(booking_router)
+    # Этот роутер должен идти раньше общего admin.router,
+    # чтобы callback add_event обрабатывался пошаговой формой.
+    dp.include_router(admin_event_router)
     dp.include_router(admin.router)
 
     logger.info("Wild East Club Bot started")
