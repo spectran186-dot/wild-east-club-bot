@@ -1,5 +1,3 @@
-import asyncio
-
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
@@ -14,7 +12,6 @@ router = Router()
 db = Database()
 ADMIN_ID = config.owner_id
 
-# Данные мероприятий, уже загруженные при показе списка.
 _event_cache = {}
 
 
@@ -55,43 +52,42 @@ def event_text(event):
 
 @router.callback_query(F.data.startswith("book_"))
 async def booking(callback: CallbackQuery, state: FSMContext):
-    # Не блокируем переход ожиданием Telegram API.
-    # Callback будет подтверждён отдельной фоновой задачей.
-    asyncio.create_task(callback.answer())
+    # В aiogram callback.answer() возвращает Telegram API метод, а не coroutine.
+    # Поэтому его нужно await-ить напрямую.
+    await callback.answer()
 
     event_id = int(callback.data.split("_", 1)[1])
     event = _event_cache.get(event_id)
 
-    # Если кнопка старая после перезапуска, восстанавливаем из БД.
     if event is None:
-        event = await db.get_event_info(event_id)
-        if event:
+        event_info = await db.get_event_info(event_id)
+        if event_info:
             event = (
-                event[0],
+                event_info[0],
                 None,
-                event[1],
-                event[2],
-                event[3],
-                event[4],
-                event[5],
-                event[6],
+                event_info[1],
+                event_info[2],
+                event_info[3],
+                event_info[4],
+                event_info[5],
+                event_info[6],
             )
             cache_event(event)
 
     if not event:
-        await callback.message.edit_text(
+        await callback.message.answer(
             "⚠️ Это мероприятие больше недоступно.\n\n"
             "Откройте раздел «Мероприятия» и выберите другое."
         )
         return
 
-    # Состояние FSM устанавливаем до Telegram API-вызова.
+    # FSM переключаем до отправки ответа в Telegram.
     await state.update_data(event_id=event_id)
     await state.set_state(BookingState.waiting_name)
 
-    # Редактируем существующее сообщение вместо отправки нового.
-    # Это убирает лишний Telegram API round-trip и исключает ощущение зависания.
-    await callback.message.edit_text(
+    # Оставляем сообщение со списком мероприятий на месте,
+    # а запрос имени отправляем отдельным сообщением.
+    await callback.message.answer(
         event_text(event),
         parse_mode="HTML",
     )
@@ -111,7 +107,7 @@ async def get_name(message: Message, state: FSMContext):
     await message.answer(
         "📞 Отправьте номер телефона кнопкой ниже "
         "или введите его вручную в формате 7XXXXXXXXX:",
-        reply_markup=phone_keyboard()
+        reply_markup=phone_keyboard(),
     )
 
 
@@ -165,7 +161,7 @@ async def get_phone(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "booking_confirm")
 async def booking_confirm(callback: CallbackQuery, state: FSMContext):
-    asyncio.create_task(callback.answer())
+    await callback.answer()
 
     data = await state.get_data()
     event_id = data.get("event_id")
@@ -239,9 +235,8 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "booking_cancel")
 async def booking_cancel(callback: CallbackQuery, state: FSMContext):
-    asyncio.create_task(callback.answer())
+    await callback.answer()
     await state.clear()
-
     await callback.message.edit_text(
         "❌ Заявка отменена.\n\n"
         "Если захотите записаться — откройте раздел «Мероприятия» ещё раз."
