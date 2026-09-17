@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
@@ -10,23 +12,22 @@ from database import Database
 db = Database()
 router = Router()
 ADMIN_ID = config.owner_id
+logger = logging.getLogger(__name__)
 
 
 def admin_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📋 Заявки",
-                    callback_data="admin_bookings"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="📅 Мероприятия",
-                    callback_data="admin_events"
-                )
-            ]
+            [InlineKeyboardButton(text="📋 Заявки", callback_data="admin_bookings")],
+            [InlineKeyboardButton(text="📅 Мероприятия", callback_data="admin_events")],
+        ]
+    )
+
+
+def back_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_back")]
         ]
     )
 
@@ -42,9 +43,88 @@ async def admin_panel(message: Message):
         return
 
     await message.answer(
-        "👨‍💼 Административная панель\n\n"
-        "Выберите нужный раздел:",
-        reply_markup=admin_keyboard()
+        "👨‍💼 Административная панель\n\nВыберите нужный раздел:",
+        reply_markup=admin_keyboard(),
+    )
+
+
+async def show_bookings(callback: CallbackQuery):
+    bookings = await db.get_bookings()
+
+    if not bookings:
+        text = "📋 <b>Заявки</b>\n\nЗаявок пока нет."
+    else:
+        lines = ["📋 <b>Заявки</b>", ""]
+        for booking in bookings:
+            (
+                booking_id,
+                full_name,
+                phone,
+                created_at,
+                event_date,
+                event_time,
+                route_title,
+            ) = booking
+
+            lines.extend([
+                f"🆔 Заявка №{booking_id}",
+                f"👤 {full_name}",
+                f"📞 +{phone}",
+                f"📅 {event_date}  {event_time}",
+                f"🛶 {route_title}",
+                f"🕐 Создана: {created_at}",
+                "──────────────",
+            ])
+        text = "\n".join(lines)
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=back_keyboard(),
+        parse_mode="HTML",
+    )
+
+
+async def show_events(callback: CallbackQuery):
+    events = await db.get_events()
+    keyboard = []
+
+    for event in events:
+        event_id, route_id, event_date, event_time, price = event
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"✏️ {event_date} {event_time}",
+                callback_data=f"edit_event_{event_id}",
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            text="➕ Добавить мероприятие",
+            callback_data="add_event",
+        )
+    ])
+    keyboard.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_back")
+    ])
+
+    await callback.message.edit_text(
+        "📅 <b>Управление мероприятиями</b>\n\n"
+        "Выберите мероприятие для редактирования или создайте новое:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "admin_back")
+async def admin_back(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    await callback.answer()
+    await callback.message.edit_text(
+        "👨‍💼 Административная панель\n\nВыберите нужный раздел:",
+        reply_markup=admin_keyboard(),
     )
 
 
@@ -54,50 +134,14 @@ async def admin_bookings(callback: CallbackQuery):
         await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    # Отвечаем Telegram немедленно. Никаких DB/API операций до callback.answer().
-    await callback.answer("Загружаю заявки…")
-
+    await callback.answer()
     try:
-        bookings = await db.get_bookings()
+        await show_bookings(callback)
     except Exception:
-        import logging
-        logging.getLogger(__name__).exception("Failed to load bookings")
-        await callback.message.answer("⚠️ Не удалось загрузить заявки. Ошибка записана в лог.")
-        return
-
-    if not bookings:
-        await callback.message.answer("📋 Заявок пока нет.")
-        return
-
-    lines = ["📋 <b>Заявки</b>", ""]
-
-    for booking in bookings:
-        (
-            booking_id,
-            full_name,
-            phone,
-            created_at,
-            event_date,
-            event_time,
-            route_title
-        ) = booking
-
-        lines.extend([
-            f"🆔 Заявка №{booking_id}",
-            f"👤 {full_name}",
-            f"📞 +{phone}",
-            f"📅 {event_date}  {event_time}",
-            f"🛶 {route_title}",
-            f"🕐 Создана: {created_at}",
-            "──────────────",
-        ])
-
-    text = "\n".join(lines)
-
-    for start in range(0, len(text), 4000):
-        await callback.message.answer(
-            text[start:start + 4000],
-            parse_mode="HTML"
+        logger.exception("Failed to load bookings")
+        await callback.message.edit_text(
+            "⚠️ Не удалось загрузить заявки. Ошибка записана в лог.",
+            reply_markup=back_keyboard(),
         )
 
 
@@ -107,42 +151,15 @@ async def admin_events(callback: CallbackQuery):
         await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    # Отвечаем Telegram немедленно. Никаких DB/API операций до callback.answer().
-    await callback.answer("Загружаю мероприятия…")
-
+    await callback.answer()
     try:
-        events = await db.get_events()
+        await show_events(callback)
     except Exception:
-        import logging
-        logging.getLogger(__name__).exception("Failed to load events")
-        await callback.message.answer("⚠️ Не удалось загрузить мероприятия. Ошибка записана в лог.")
-        return
-
-    keyboard = []
-
-    for event in events:
-        event_id, route_id, event_date, event_time, price = event
-        keyboard.append([
-            InlineKeyboardButton(
-                text=f"✏️ {event_date} {event_time}",
-                callback_data=f"edit_event_{event_id}"
-            )
-        ])
-
-    keyboard.append([
-        InlineKeyboardButton(
-            text="➕ Добавить мероприятие",
-            callback_data="add_event"
+        logger.exception("Failed to load events")
+        await callback.message.edit_text(
+            "⚠️ Не удалось загрузить мероприятия. Ошибка записана в лог.",
+            reply_markup=back_keyboard(),
         )
-    ])
-
-    await callback.message.answer(
-        "📅 <b>Управление мероприятиями</b>\n\n"
-        "Выберите мероприятие для редактирования "
-        "или создайте новое:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode="HTML"
-    )
 
 
 @router.callback_query(F.data.startswith("edit_event_"))
@@ -153,7 +170,7 @@ async def edit_event_placeholder(callback: CallbackQuery):
 
     await callback.answer(
         "✏️ Редактирование мероприятий пока не реализовано.",
-        show_alert=True
+        show_alert=True,
     )
 
 
@@ -165,5 +182,5 @@ async def add_event_placeholder(callback: CallbackQuery):
 
     await callback.answer(
         "➕ Создание мероприятий пока не реализовано.",
-        show_alert=True
+        show_alert=True,
     )
