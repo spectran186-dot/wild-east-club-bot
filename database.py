@@ -10,14 +10,17 @@ class Database:
         Path(config.database_name).parent.mkdir(parents=True, exist_ok=True)
 
     async def _connect(self):
+        # Не меняем journal_mode при каждом запросе: PRAGMA journal_mode=WAL
+        # может ждать блокировку файла БД и создавать фризы в Telegram-обработчиках.
         connection = await aiosqlite.connect(config.database_name, timeout=10)
         await connection.execute("PRAGMA busy_timeout = 10000")
-        await connection.execute("PRAGMA journal_mode = WAL")
         return connection
 
     async def create_tables(self):
         connection = await self._connect()
         try:
+            # WAL включаем один раз при инициализации БД, а не перед каждым запросом.
+            await connection.execute("PRAGMA journal_mode = WAL")
             await connection.executescript("""
             CREATE TABLE IF NOT EXISTS users(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -267,7 +270,6 @@ class Database:
                 await connection.commit()
                 return
 
-            # Сначала мигрируем старую встроенную запись 30.08.2026.
             cursor = await connection.execute(
                 """
                 SELECT id
@@ -305,8 +307,6 @@ class Database:
                     await connection.commit()
                     return
 
-            # Если старой демо-записи уже нет, создаём актуальную тестовую запись
-            # только если точно такой записи ещё нет.
             cursor = await connection.execute(
                 """
                 SELECT id
