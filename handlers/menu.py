@@ -10,8 +10,8 @@ db = Database()
 router = Router()
 
 
-async def show_prices(target):
-    await target.edit_text(
+async def show_prices(message: Message):
+    await message.answer(
         "💰 <b>Стоимость</b>\n\n"
         "🌊 р. Кия\n"
         "• Взрослый — 2500 ₽\n"
@@ -25,8 +25,8 @@ async def show_prices(target):
     )
 
 
-async def show_contacts(target):
-    await target.edit_text(
+async def show_contacts(message: Message):
+    await message.answer(
         "📞 <b>Контакты</b>\n\n"
         "Телефон:\n"
         "+79244160083\n\n"
@@ -39,8 +39,8 @@ async def show_contacts(target):
     )
 
 
-async def show_faq(target):
-    await target.edit_text(
+async def show_faq(message: Message):
+    await message.answer(
         "❓ <b>Частые вопросы</b>\n\n"
         "• Нужен ли опыт? — Нет.\n"
         "• Выдают ли жилет? — Да.\n"
@@ -50,11 +50,11 @@ async def show_faq(target):
     )
 
 
-async def show_events(target):
+async def show_events(message: Message):
     events_list = await db.get_events()
 
     if not events_list:
-        await target.edit_text(
+        await message.answer(
             "📅 <b>Мероприятия</b>\n\nПока мероприятий нет.",
             reply_markup=back_to_menu_keyboard(),
             parse_mode="HTML",
@@ -78,7 +78,7 @@ async def show_events(target):
         InlineKeyboardButton(text="⬅️ Главное меню", callback_data="menu_back")
     ])
 
-    await target.edit_text(
+    await message.answer(
         "\n".join(lines),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode="HTML",
@@ -141,7 +141,7 @@ async def menu_events(callback: CallbackQuery):
     try:
         await show_events(callback.message)
     except Exception:
-        await callback.message.edit_text(
+        await callback.message.answer(
             "⚠️ Не удалось загрузить мероприятия. Попробуйте ещё раз.",
             reply_markup=back_to_menu_keyboard(),
         )
@@ -150,10 +150,7 @@ async def menu_events(callback: CallbackQuery):
 @router.callback_query(F.data == "menu_back")
 async def menu_back(callback: CallbackQuery):
     await callback.answer()
-    await callback.message.edit_text(
-        "🌊 <b>Wild East Club</b>\n\n"
-        "Стирая границы, создавая моменты.\n\n"
-        "Выберите нужный раздел 👇",
-        reply_markup=main_menu,
-        parse_mode="HTML",
-    )
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
