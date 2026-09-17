@@ -12,6 +12,14 @@ router = Router()
 db = Database()
 ADMIN_ID = config.owner_id
 
+# Данные мероприятий, уже загруженные при показе списка.
+# Это позволяет открыть запись без повторного обращения к SQLite.
+_event_cache = {}
+
+
+def cache_event(event):
+    _event_cache[event[0]] = event
+
 
 def booking_keyboard(event_id):
     return InlineKeyboardMarkup(
@@ -29,6 +37,7 @@ def booking_keyboard(event_id):
 def event_text(event):
     (
         _event_id,
+        _route_id,
         event_date,
         event_time,
         price,
@@ -50,10 +59,29 @@ def event_text(event):
 
 @router.callback_query(F.data.startswith("book_"))
 async def booking(callback: CallbackQuery, state: FSMContext):
+    # Отвечаем на callback первым действием, чтобы Telegram сразу убрал
+    # индикатор загрузки с кнопки.
     await callback.answer()
 
     event_id = int(callback.data.split("_", 1)[1])
-    event = await db.get_event_info(event_id)
+    event = _event_cache.get(event_id)
+
+    # Кэш нужен для быстрого перехода. Если пользователь нажал старую
+    # кнопку после перезапуска бота, один раз восстанавливаем данные из БД.
+    if event is None:
+        event = await db.get_event_info(event_id)
+        if event:
+            event = (
+                event[0],
+                None,
+                event[1],
+                event[2],
+                event[3],
+                event[4],
+                event[5],
+                event[6],
+            )
+            cache_event(event)
 
     if not event:
         await callback.message.answer(
@@ -99,12 +127,12 @@ async def get_phone(message: Message, state: FSMContext):
 
     await state.update_data(phone=phone)
     data = await state.get_data()
-    event = await db.get_event_info(data.get("event_id"))
+    event = _event_cache.get(data.get("event_id"))
 
-    event_info = ""
     if event:
         (
             _event_id,
+            _route_id,
             event_date,
             event_time,
             price,
@@ -119,6 +147,8 @@ async def get_phone(message: Message, state: FSMContext):
             f"📍 {start_point} → {finish_point}\n"
             f"💰 Стоимость: {price} ₽\n\n"
         )
+    else:
+        event_info = ""
 
     await message.answer(
         "📋 <b>Проверьте данные заявки</b>\n\n"
@@ -161,11 +191,11 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
             phone=phone,
         )
 
-        event = await db.get_event_info(event_id)
-
+        event = _event_cache.get(event_id)
         if event:
             (
                 _event_id,
+                _route_id,
                 event_date,
                 event_time,
                 price,
