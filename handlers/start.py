@@ -1,5 +1,3 @@
-import asyncio
-
 from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.types import Message
@@ -13,8 +11,7 @@ db = Database()
 
 @router.message(CommandStart())
 async def start(message: Message):
-    await asyncio.to_thread(
-        db.add_user,
+    await db.add_user(
         telegram_id=message.from_user.id,
         first_name=message.from_user.first_name,
         username=message.from_user.username,
