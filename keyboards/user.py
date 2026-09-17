@@ -1,16 +1,23 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-main_menu = ReplyKeyboardMarkup(
-    keyboard=[
+
+main_menu = InlineKeyboardMarkup(
+    inline_keyboard=[
         [
-            KeyboardButton(text="📅 Мероприятия"),
-            KeyboardButton(text="💰 Цены"),
+            InlineKeyboardButton(text="📅 Мероприятия", callback_data="menu_events"),
+            InlineKeyboardButton(text="💰 Цены", callback_data="menu_prices"),
         ],
         [
-            KeyboardButton(text="📞 Контакты"),
-            KeyboardButton(text="❓ FAQ"),
+            InlineKeyboardButton(text="📞 Контакты", callback_data="menu_contacts"),
+            InlineKeyboardButton(text="❓ FAQ", callback_data="menu_faq"),
         ],
-    ],
-    resize_keyboard=True,
-    input_field_placeholder="Выберите раздел",
+    ]
 )
+
+
+def back_to_menu_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Главное меню", callback_data="menu_back")]
+        ]
+    )
