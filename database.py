@@ -113,19 +113,21 @@ class Database:
         finally:
             await connection.close()
 
-    async def has_booking(self, telegram_id, event_id):
+    async def has_booking(self, event_id, full_name, phone):
         connection = await self._connect()
         try:
             cursor = await connection.execute(
                 """
                 SELECT 1
                 FROM bookings
-                WHERE telegram_id = ?
-                  AND event_id = ?
+                WHERE event_id = ?
+                  AND LOWER(TRIM(full_name)) = LOWER(TRIM(?))
+                  AND REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') =
+                      REPLACE(REPLACE(REPLACE(REPLACE(?, ' ', ''), '-', ''), '(', ''), ')', '')
                   AND status NOT IN ('cancelled', 'canceled')
                 LIMIT 1
                 """,
-                (telegram_id, event_id),
+                (event_id, full_name, phone),
             )
             return await cursor.fetchone() is not None
         finally:
