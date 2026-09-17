@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from database import Database
 from handlers.booking import booking_keyboard
@@ -61,7 +61,6 @@ async def show_events(target):
         )
         return
 
-    # Одно сообщение на весь список, чтобы переходы не создавали очередь сообщений.
     lines = ["📅 <b>Мероприятия</b>", ""]
     keyboard = []
 
@@ -73,15 +72,12 @@ async def show_events(target):
             f"💰 {event[4]} ₽",
             "",
         ])
-        keyboard.append([booking_keyboard(event[0]).inline_keyboard[0][0]])
+        keyboard.append(booking_keyboard(event[0]).inline_keyboard[0])
 
     keyboard.append([
-        __import__("aiogram").types.InlineKeyboardButton(
-            text="⬅️ Главное меню", callback_data="menu_back"
-        )
+        InlineKeyboardButton(text="⬅️ Главное меню", callback_data="menu_back")
     ])
 
-    from aiogram.types import InlineKeyboardMarkup
     await target.edit_text(
         "\n".join(lines),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
@@ -91,23 +87,34 @@ async def show_events(target):
 
 @router.message(F.text == "📅 Мероприятия")
 async def legacy_events(message: Message):
-    # Совместимость со старыми сообщениями/клавиатурами.
-    await message.answer("Откройте /start, чтобы использовать обновлённое меню.", reply_markup=main_menu)
+    await message.answer(
+        "Откройте /start, чтобы использовать обновлённое меню.",
+        reply_markup=main_menu,
+    )
 
 
 @router.message(F.text == "💰 Цены")
 async def legacy_prices(message: Message):
-    await message.answer("Откройте /start, чтобы использовать обновлённое меню.", reply_markup=main_menu)
+    await message.answer(
+        "Откройте /start, чтобы использовать обновлённое меню.",
+        reply_markup=main_menu,
+    )
 
 
 @router.message(F.text == "📞 Контакты")
 async def legacy_contacts(message: Message):
-    await message.answer("Откройте /start, чтобы использовать обновлённое меню.", reply_markup=main_menu)
+    await message.answer(
+        "Откройте /start, чтобы использовать обновлённое меню.",
+        reply_markup=main_menu,
+    )
 
 
 @router.message(F.text == "❓ FAQ")
 async def legacy_faq(message: Message):
-    await message.answer("Откройте /start, чтобы использовать обновлённое меню.", reply_markup=main_menu)
+    await message.answer(
+        "Откройте /start, чтобы использовать обновлённое меню.",
+        reply_markup=main_menu,
+    )
 
 
 @router.callback_query(F.data == "menu_prices")
