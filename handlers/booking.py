@@ -1,3 +1,5 @@
+import asyncio
+
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
@@ -53,16 +55,14 @@ def event_text(event):
 
 @router.callback_query(F.data.startswith("book_"))
 async def booking(callback: CallbackQuery, state: FSMContext):
-    # Telegram должен получить подтверждение callback сразу.
-    await callback.answer()
+    # Не блокируем переход ожиданием Telegram API.
+    # Callback будет подтверждён отдельной фоновой задачей.
+    asyncio.create_task(callback.answer())
 
     event_id = int(callback.data.split("_", 1)[1])
     event = _event_cache.get(event_id)
 
-    # Важный момент: состояние FSM устанавливаем ДО любых медленных
-    # Telegram API-вызовов. Если пользователь быстро введёт имя, оно уже
-    # попадёт в правильный обработчик, даже если Telegram ещё доставляет
-    # сообщение с деталями мероприятия.
+    # Если кнопка старая после перезапуска, восстанавливаем из БД.
     if event is None:
         event = await db.get_event_info(event_id)
         if event:
@@ -79,16 +79,22 @@ async def booking(callback: CallbackQuery, state: FSMContext):
             cache_event(event)
 
     if not event:
-        await callback.message.answer(
+        await callback.message.edit_text(
             "⚠️ Это мероприятие больше недоступно.\n\n"
             "Откройте раздел «Мероприятия» и выберите другое."
         )
         return
 
+    # Состояние FSM устанавливаем до Telegram API-вызова.
     await state.update_data(event_id=event_id)
     await state.set_state(BookingState.waiting_name)
 
-    await callback.message.answer(event_text(event), parse_mode="HTML")
+    # Редактируем существующее сообщение вместо отправки нового.
+    # Это убирает лишний Telegram API round-trip и исключает ощущение зависания.
+    await callback.message.edit_text(
+        event_text(event),
+        parse_mode="HTML",
+    )
 
 
 @router.message(BookingState.waiting_name)
@@ -159,7 +165,7 @@ async def get_phone(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "booking_confirm")
 async def booking_confirm(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
+    asyncio.create_task(callback.answer())
 
     data = await state.get_data()
     event_id = data.get("event_id")
@@ -233,7 +239,7 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "booking_cancel")
 async def booking_cancel(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
+    asyncio.create_task(callback.answer())
     await state.clear()
 
     await callback.message.edit_text(
