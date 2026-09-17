@@ -10,8 +10,6 @@ class Database:
         Path(config.database_name).parent.mkdir(parents=True, exist_ok=True)
 
     async def _connect(self):
-        # Не меняем journal_mode при каждом запросе: PRAGMA journal_mode=WAL
-        # может ждать блокировку файла БД и создавать фризы в Telegram-обработчиках.
         connection = await aiosqlite.connect(config.database_name, timeout=10)
         await connection.execute("PRAGMA busy_timeout = 10000")
         return connection
@@ -19,7 +17,6 @@ class Database:
     async def create_tables(self):
         connection = await self._connect()
         try:
-            # WAL включаем один раз при инициализации БД, а не перед каждым запросом.
             await connection.execute("PRAGMA journal_mode = WAL")
             await connection.executescript("""
             CREATE TABLE IF NOT EXISTS users(
@@ -93,12 +90,7 @@ class Database:
                 (telegram_id, first_name, username, created_at)
                 VALUES (?, ?, ?, ?)
                 """,
-                (
-                    telegram_id,
-                    first_name,
-                    username,
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                ),
+                (telegram_id, first_name, username, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             )
             await connection.commit()
         finally:
@@ -109,15 +101,8 @@ class Database:
         try:
             cursor = await connection.execute(
                 """
-                SELECT
-                    events.id,
-                    events.route_id,
-                    events.event_date,
-                    events.event_time,
-                    events.price,
-                    routes.title,
-                    routes.start_point,
-                    routes.finish_point
+                SELECT events.id, events.route_id, events.event_date, events.event_time,
+                       events.price, routes.title, routes.start_point, routes.finish_point
                 FROM events
                 LEFT JOIN routes ON routes.id = events.route_id
                 WHERE events.status = 'active'
@@ -125,6 +110,24 @@ class Database:
                 """
             )
             return await cursor.fetchall()
+        finally:
+            await connection.close()
+
+    async def has_booking(self, telegram_id, event_id):
+        connection = await self._connect()
+        try:
+            cursor = await connection.execute(
+                """
+                SELECT 1
+                FROM bookings
+                WHERE telegram_id = ?
+                  AND event_id = ?
+                  AND status NOT IN ('cancelled', 'canceled')
+                LIMIT 1
+                """,
+                (telegram_id, event_id),
+            )
+            return await cursor.fetchone() is not None
         finally:
             await connection.close()
 
@@ -153,11 +156,7 @@ class Database:
         connection = await self._connect()
         try:
             cursor = await connection.execute(
-                """
-                SELECT id, event_date, event_time, price
-                FROM events
-                WHERE id = ?
-                """,
+                "SELECT id, event_date, event_time, price FROM events WHERE id = ?",
                 (event_id,),
             )
             return await cursor.fetchone()
@@ -169,14 +168,8 @@ class Database:
         try:
             cursor = await connection.execute(
                 """
-                SELECT
-                    events.id,
-                    events.event_date,
-                    events.event_time,
-                    events.price,
-                    routes.title,
-                    routes.start_point,
-                    routes.finish_point
+                SELECT events.id, events.event_date, events.event_time, events.price,
+                       routes.title, routes.start_point, routes.finish_point
                 FROM events
                 LEFT JOIN routes ON routes.id = events.route_id
                 WHERE events.id = ?
@@ -192,14 +185,8 @@ class Database:
         try:
             cursor = await connection.execute(
                 """
-                SELECT
-                    bookings.id,
-                    bookings.full_name,
-                    bookings.phone,
-                    bookings.created_at,
-                    events.event_date,
-                    events.event_time,
-                    routes.title
+                SELECT bookings.id, bookings.full_name, bookings.phone,
+                       bookings.created_at, events.event_date, events.event_time, routes.title
                 FROM bookings
                 LEFT JOIN events ON events.id = bookings.event_id
                 LEFT JOIN routes ON routes.id = events.route_id
@@ -219,30 +206,9 @@ class Database:
                 return
 
             routes = [
-                (
-                    "Переяславка → Гродеково",
-                    "Переяславка",
-                    "Гродеково",
-                    "Самый популярный маршрут",
-                    "3 часа",
-                    2500,
-                ),
-                (
-                    "Гродеково → Могилёвка",
-                    "Гродеково",
-                    "Могилёвка",
-                    "Длинный маршрут",
-                    "4 часа",
-                    2500,
-                ),
-                (
-                    "Амуркабель → Ерофей",
-                    "Амуркабель",
-                    "Арена Ерофей",
-                    "Закатный маршрут",
-                    "2 часа",
-                    1500,
-                ),
+                ("Переяславка → Гродеково", "Переяславка", "Гродеково", "Самый популярный маршрут", "3 часа", 2500),
+                ("Гродеково → Могилёвка", "Гродеково", "Могилёвка", "Длинный маршрут", "4 часа", 2500),
+                ("Амуркабель → Ерофей", "Амуркабель", "Арена Ерофей", "Закатный маршрут", "2 часа", 1500),
             ]
 
             await connection.executemany(
@@ -281,11 +247,8 @@ class Database:
 
             cursor = await connection.execute(
                 """
-                SELECT id
-                FROM events
-                WHERE route_id = 1
-                  AND event_date = '2026-08-30'
-                  AND event_time = '10:00-13:00'
+                SELECT id FROM events
+                WHERE route_id = 1 AND event_date = '2026-08-30' AND event_time = '10:00-13:00'
                 LIMIT 1
                 """
             )
@@ -302,13 +265,8 @@ class Database:
                     await connection.execute(
                         """
                         UPDATE events
-                        SET event_date = ?,
-                            event_time = ?,
-                            price = ?,
-                            max_places = 10,
-                            free_places = 10,
-                            meeting_point = 'Переяславка',
-                            status = 'active'
+                        SET event_date = ?, event_time = ?, price = ?, max_places = 10,
+                            free_places = 10, meeting_point = 'Переяславка', status = 'active'
                         WHERE id = ?
                         """,
                         (demo_date, demo_time, demo_price, old_demo[0]),
@@ -318,11 +276,8 @@ class Database:
 
             cursor = await connection.execute(
                 """
-                SELECT id
-                FROM events
-                WHERE route_id = 1
-                  AND event_date = ?
-                  AND event_time = ?
+                SELECT id FROM events
+                WHERE route_id = 1 AND event_date = ? AND event_time = ?
                 LIMIT 1
                 """,
                 (demo_date, demo_time),
