@@ -1,4 +1,4 @@
-import sqlite3
+import aiosqlite
 from datetime import datetime
 from pathlib import Path
 
@@ -9,15 +9,16 @@ class Database:
     def __init__(self):
         Path(config.database_name).parent.mkdir(parents=True, exist_ok=True)
 
-    def _connect(self):
-        connection = sqlite3.connect(config.database_name, timeout=10)
-        connection.execute("PRAGMA busy_timeout = 10000")
-        connection.execute("PRAGMA journal_mode = WAL")
+    async def _connect(self):
+        connection = await aiosqlite.connect(config.database_name, timeout=10)
+        await connection.execute("PRAGMA busy_timeout = 10000")
+        await connection.execute("PRAGMA journal_mode = WAL")
         return connection
 
-    def create_tables(self):
-        with self._connect() as connection:
-            connection.executescript("""
+    async def create_tables(self):
+        connection = await self._connect()
+        try:
+            await connection.executescript("""
             CREATE TABLE IF NOT EXISTS users(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 telegram_id INTEGER UNIQUE,
@@ -76,10 +77,14 @@ class Database:
                 value TEXT
             );
             """)
+            await connection.commit()
+        finally:
+            await connection.close()
 
-    def add_user(self, telegram_id, first_name, username):
-        with self._connect() as connection:
-            connection.execute(
+    async def add_user(self, telegram_id, first_name, username):
+        connection = await self._connect()
+        try:
+            await connection.execute(
                 """
                 INSERT OR IGNORE INTO users
                 (telegram_id, first_name, username, created_at)
@@ -92,10 +97,14 @@ class Database:
                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 ),
             )
+            await connection.commit()
+        finally:
+            await connection.close()
 
-    def get_events(self):
-        with self._connect() as connection:
-            cursor = connection.execute(
+    async def get_events(self):
+        connection = await self._connect()
+        try:
+            cursor = await connection.execute(
                 """
                 SELECT id, route_id, event_date, event_time, price
                 FROM events
@@ -103,11 +112,14 @@ class Database:
                 ORDER BY event_date, event_time
                 """
             )
-            return cursor.fetchall()
+            return await cursor.fetchall()
+        finally:
+            await connection.close()
 
-    def add_booking(self, telegram_id, event_id, full_name, phone):
-        with self._connect() as connection:
-            connection.execute(
+    async def add_booking(self, telegram_id, event_id, full_name, phone):
+        connection = await self._connect()
+        try:
+            await connection.execute(
                 """
                 INSERT INTO bookings
                 (telegram_id, event_id, full_name, phone, created_at)
@@ -121,10 +133,14 @@ class Database:
                     datetime.now().strftime("%Y-%m-%d %H:%M"),
                 ),
             )
+            await connection.commit()
+        finally:
+            await connection.close()
 
-    def get_event(self, event_id):
-        with self._connect() as connection:
-            cursor = connection.execute(
+    async def get_event(self, event_id):
+        connection = await self._connect()
+        try:
+            cursor = await connection.execute(
                 """
                 SELECT id, event_date, event_time, price
                 FROM events
@@ -132,11 +148,14 @@ class Database:
                 """,
                 (event_id,),
             )
-            return cursor.fetchone()
+            return await cursor.fetchone()
+        finally:
+            await connection.close()
 
-    def get_event_info(self, event_id):
-        with self._connect() as connection:
-            cursor = connection.execute(
+    async def get_event_info(self, event_id):
+        connection = await self._connect()
+        try:
+            cursor = await connection.execute(
                 """
                 SELECT
                     events.id,
@@ -152,11 +171,14 @@ class Database:
                 """,
                 (event_id,),
             )
-            return cursor.fetchone()
+            return await cursor.fetchone()
+        finally:
+            await connection.close()
 
-    def get_bookings(self):
-        with self._connect() as connection:
-            cursor = connection.execute(
+    async def get_bookings(self):
+        connection = await self._connect()
+        try:
+            cursor = await connection.execute(
                 """
                 SELECT
                     bookings.id,
@@ -172,11 +194,15 @@ class Database:
                 ORDER BY bookings.id DESC
                 """
             )
-            return cursor.fetchall()
+            return await cursor.fetchall()
+        finally:
+            await connection.close()
 
-    def create_demo_routes(self):
-        with self._connect() as connection:
-            count = connection.execute("SELECT COUNT(*) FROM routes").fetchone()[0]
+    async def create_demo_routes(self):
+        connection = await self._connect()
+        try:
+            cursor = await connection.execute("SELECT COUNT(*) FROM routes")
+            count = (await cursor.fetchone())[0]
             if count:
                 return
 
@@ -207,7 +233,7 @@ class Database:
                 ),
             ]
 
-            connection.executemany(
+            await connection.executemany(
                 """
                 INSERT INTO routes
                 (title, start_point, finish_point, description, duration, default_price)
@@ -215,17 +241,22 @@ class Database:
                 """,
                 routes,
             )
+            await connection.commit()
+        finally:
+            await connection.close()
 
-    def create_demo_events(self):
+    async def create_demo_events(self):
         demo_date = "2026-09-20"
         demo_time = "10:00-13:00"
         demo_price = 2500
 
-        with self._connect() as connection:
-            count = connection.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+        connection = await self._connect()
+        try:
+            cursor = await connection.execute("SELECT COUNT(*) FROM events")
+            count = (await cursor.fetchone())[0]
 
             if count == 0:
-                connection.execute(
+                await connection.execute(
                     """
                     INSERT INTO events
                     (route_id, event_date, event_time, price, max_places, free_places, meeting_point)
@@ -233,11 +264,11 @@ class Database:
                     """,
                     (1, demo_date, demo_time, demo_price, 10, 10, "Переяславка"),
                 )
+                await connection.commit()
                 return
 
-            # Обновляем только старую встроенную демо-запись,
-            # если на неё ещё никто не записывался.
-            old_demo = connection.execute(
+            # Сначала мигрируем старую встроенную запись 30.08.2026.
+            cursor = await connection.execute(
                 """
                 SELECT id
                 FROM events
@@ -246,16 +277,18 @@ class Database:
                   AND event_time = '10:00-13:00'
                 LIMIT 1
                 """
-            ).fetchone()
+            )
+            old_demo = await cursor.fetchone()
 
             if old_demo:
-                booking_count = connection.execute(
+                cursor = await connection.execute(
                     "SELECT COUNT(*) FROM bookings WHERE event_id = ?",
                     (old_demo[0],),
-                ).fetchone()[0]
+                )
+                booking_count = (await cursor.fetchone())[0]
 
                 if booking_count == 0:
-                    connection.execute(
+                    await connection.execute(
                         """
                         UPDATE events
                         SET event_date = ?,
@@ -269,3 +302,33 @@ class Database:
                         """,
                         (demo_date, demo_time, demo_price, old_demo[0]),
                     )
+                    await connection.commit()
+                    return
+
+            # Если старой демо-записи уже нет, создаём актуальную тестовую запись
+            # только если точно такой записи ещё нет.
+            cursor = await connection.execute(
+                """
+                SELECT id
+                FROM events
+                WHERE route_id = 1
+                  AND event_date = ?
+                  AND event_time = ?
+                LIMIT 1
+                """,
+                (demo_date, demo_time),
+            )
+            current_demo = await cursor.fetchone()
+
+            if not current_demo:
+                await connection.execute(
+                    """
+                    INSERT INTO events
+                    (route_id, event_date, event_time, price, max_places, free_places, meeting_point)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (1, demo_date, demo_time, demo_price, 10, 10, "Переяславка"),
+                )
+                await connection.commit()
+        finally:
+            await connection.close()
