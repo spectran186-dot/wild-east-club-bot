@@ -54,8 +54,16 @@ async def admin_bookings(callback: CallbackQuery):
         await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    await callback.answer()
-    bookings = await db.get_bookings()
+    # Отвечаем Telegram немедленно. Никаких DB/API операций до callback.answer().
+    await callback.answer("Загружаю заявки…")
+
+    try:
+        bookings = await db.get_bookings()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Failed to load bookings")
+        await callback.message.answer("⚠️ Не удалось загрузить заявки. Ошибка записана в лог.")
+        return
 
     if not bookings:
         await callback.message.answer("📋 Заявок пока нет.")
@@ -99,8 +107,17 @@ async def admin_events(callback: CallbackQuery):
         await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    await callback.answer()
-    events = await db.get_events()
+    # Отвечаем Telegram немедленно. Никаких DB/API операций до callback.answer().
+    await callback.answer("Загружаю мероприятия…")
+
+    try:
+        events = await db.get_events()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Failed to load events")
+        await callback.message.answer("⚠️ Не удалось загрузить мероприятия. Ошибка записана в лог.")
+        return
+
     keyboard = []
 
     for event in events:
