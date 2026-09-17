@@ -1,5 +1,3 @@
-import asyncio
-
 from aiogram import Router, F
 from aiogram.types import Message
 
@@ -50,7 +48,7 @@ async def faq(message: Message):
 
 @router.message(F.text == "📅 Мероприятия")
 async def events(message: Message):
-    events_list = await asyncio.to_thread(db.get_events)
+    events_list = await db.get_events()
 
     if not events_list:
         await message.answer("Пока мероприятий нет.")
