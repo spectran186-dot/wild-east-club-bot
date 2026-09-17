@@ -38,6 +38,12 @@ async def main():
     await db.create_demo_events()
 
     bot = Bot(config.config.bot_token)
+
+    # Не обрабатываем старые сообщения и нажатия, накопившиеся пока бот
+    # был выключен. Это особенно важно для inline-кнопок: старые callback
+    # query больше не должны приходить пачкой после перезапуска.
+    await bot.delete_webhook(drop_pending_updates=True)
+
     dp = Dispatcher()
     dp.errors.register(on_error)
 
