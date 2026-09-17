@@ -26,15 +26,44 @@ def booking_keyboard(event_id):
     )
 
 
+def event_text(event):
+    (
+        _event_id,
+        event_date,
+        event_time,
+        price,
+        route_title,
+        start_point,
+        finish_point,
+    ) = event
+
+    return (
+        "🌊 <b>Вы выбрали мероприятие</b>\n\n"
+        f"🛶 <b>{route_title}</b>\n"
+        f"📅 {event_date}\n"
+        f"🕐 {event_time}\n"
+        f"📍 {start_point} → {finish_point}\n"
+        f"💰 <b>{price} ₽</b>\n\n"
+        "👤 Теперь введите ваше имя:"
+    )
+
+
 @router.callback_query(F.data.startswith("book_"))
 async def booking(callback: CallbackQuery, state: FSMContext):
-    # Сразу подтверждаем callback и редактируем текущее сообщение.
-    # Новое сообщение здесь не создаём, чтобы переход не накапливался в очереди.
     await callback.answer()
 
     event_id = int(callback.data.split("_", 1)[1])
+    event = await db.get_event_info(event_id)
+
+    if not event:
+        await callback.message.answer(
+            "⚠️ Это мероприятие больше недоступно.\n\n"
+            "Откройте раздел «Мероприятия» и выберите другое."
+        )
+        return
+
     await state.update_data(event_id=event_id)
-    await callback.message.edit_text("👤 <b>Введите ваше имя:</b>", parse_mode="HTML")
+    await callback.message.answer(event_text(event), parse_mode="HTML")
     await state.set_state(BookingState.waiting_name)
 
 
@@ -70,13 +99,35 @@ async def get_phone(message: Message, state: FSMContext):
 
     await state.update_data(phone=phone)
     data = await state.get_data()
+    event = await db.get_event_info(data.get("event_id"))
+
+    event_info = ""
+    if event:
+        (
+            _event_id,
+            event_date,
+            event_time,
+            price,
+            route_title,
+            start_point,
+            finish_point,
+        ) = event
+        event_info = (
+            f"🛶 Маршрут: {route_title}\n"
+            f"📅 Дата: {event_date}\n"
+            f"🕐 Время: {event_time}\n"
+            f"📍 {start_point} → {finish_point}\n"
+            f"💰 Стоимость: {price} ₽\n\n"
+        )
 
     await message.answer(
-        "📋 Проверьте данные заявки:\n\n"
+        "📋 <b>Проверьте данные заявки</b>\n\n"
+        f"{event_info}"
         f"👤 Имя: {data['full_name']}\n"
         f"📞 Телефон: {phone}\n\n"
         "Всё верно?",
-        reply_markup=booking_confirm_keyboard()
+        reply_markup=booking_confirm_keyboard(),
+        parse_mode="HTML",
     )
 
 
@@ -90,7 +141,7 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
     phone = data.get("phone")
 
     if not event_id or not full_name or not phone:
-        await callback.message.edit_text(
+        await callback.message.answer(
             "❌ Не удалось получить данные заявки.\n"
             "Пожалуйста, начните запись заново."
         )
@@ -117,7 +168,7 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
                 _event_id,
                 event_date,
                 event_time,
-                _price,
+                price,
                 route_title,
                 _start_point,
                 _finish_point,
@@ -129,7 +180,8 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
                     "🔔 НОВАЯ ЗАЯВКА!\n\n"
                     f"📅 Дата: {event_date}\n"
                     f"🕐 Время: {event_time}\n"
-                    f"🛶 Маршрут: {route_title}\n\n"
+                    f"🛶 Маршрут: {route_title}\n"
+                    f"💰 Стоимость: {price} ₽\n\n"
                     f"👤 Имя: {full_name}\n"
                     f"📞 Телефон: {phone}\n"
                 )
@@ -137,11 +189,11 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
                 pass
 
         await callback.message.edit_text(
-            "🎉 Спасибо!\n\n"
-            "Мы приняли вашу заявку на САП-сплав с командой Wild East Club!\n\n"
-            "Будем рады видеть вас на старте. 😉\n\n"
+            "🎉 <b>Заявка принята!</b>\n\n"
+            "Мы приняли вашу заявку на САП-сплав с командой Wild East Club.\n\n"
             "В ближайшее время организатор свяжется с вами для подтверждения участия.\n\n"
-            "📞 +7 924 416-00-83"
+            "📞 +7 924 416-00-83",
+            parse_mode="HTML",
         )
     except Exception:
         await callback.message.edit_text(
@@ -160,5 +212,5 @@ async def booking_cancel(callback: CallbackQuery, state: FSMContext):
 
     await callback.message.edit_text(
         "❌ Заявка отменена.\n\n"
-        "Если захотите записаться — откройте раздел «📅 Мероприятия» ещё раз."
+        "Если захотите записаться — откройте раздел «Мероприятия» ещё раз."
     )
