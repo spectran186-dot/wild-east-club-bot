@@ -33,9 +33,9 @@ async def main():
         raise RuntimeError("OWNER_ID is not configured")
 
     db = database.Database()
-    db.create_tables()
-    db.create_demo_routes()
-    db.create_demo_events()
+    await db.create_tables()
+    await db.create_demo_routes()
+    await db.create_demo_events()
 
     bot = Bot(config.config.bot_token)
     dp = Dispatcher()
