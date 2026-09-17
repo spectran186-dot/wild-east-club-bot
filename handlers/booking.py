@@ -50,16 +50,6 @@ async def booking(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
     event_id = int(callback.data.split("_", 1)[1])
-    user_id = callback.from_user.id
-
-    if await db.has_booking(user_id, event_id):
-        await callback.message.edit_text(
-            "ℹ️ <b>Вы уже записаны на это мероприятие.</b>\n\n"
-            "Повторная заявка не требуется.\n"
-            "Если хотите изменить данные заявки — свяжитесь с организатором.",
-            parse_mode="HTML",
-        )
-        return
 
     event = _event_cache.get(event_id)
 
@@ -158,10 +148,15 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
         await state.clear()
         return
 
-    if await db.has_booking(user_id, event_id):
+    # Дубль определяется не по Telegram ID заявителя:
+    # один пользователь может оформить несколько заявок для разных людей.
+    # Проверяем связку: мероприятие + имя + телефон.
+    if await db.has_booking(event_id, full_name, phone):
         await callback.message.edit_text(
-            "ℹ️ <b>Вы уже записаны на это мероприятие.</b>\n\n"
-            "Повторная заявка не создана.",
+            "ℹ️ <b>Такая заявка уже существует.</b>\n\n"
+            f"👤 Имя: {full_name}\n"
+            f"📞 Телефон: {phone}\n\n"
+            "Для этого мероприятия заявка с такими данными уже была создана.",
             parse_mode="HTML",
         )
         await state.clear()
@@ -180,11 +175,10 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
     )
 
     try:
-        # Повторная проверка непосредственно перед записью защищает от
-        # повторного подтверждения после задержки Telegram.
-        if await db.has_booking(user_id, event_id):
+        # Повторная проверка непосредственно перед записью.
+        if await db.has_booking(event_id, full_name, phone):
             await callback.message.edit_text(
-                "ℹ️ <b>Вы уже записаны на это мероприятие.</b>\n\n"
+                "ℹ️ <b>Такая заявка уже существует.</b>\n\n"
                 "Повторная заявка не создана.",
                 parse_mode="HTML",
             )
