@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from database import Database
-from handlers.booking import booking_keyboard
+from handlers.booking import booking_keyboard, cache_event
 from keyboards.user import main_menu, back_to_menu_keyboard
 
 
@@ -65,14 +65,19 @@ async def show_events(message: Message):
     keyboard = []
 
     for event in events_list:
+        event_id, route_id, event_date, event_time, price, route_title, start_point, finish_point = event
+        cache_event(event)
+
         lines.extend([
             "🌊 <b>САП-сплав</b>",
-            f"📅 {event[2]}",
-            f"🕒 {event[3]}",
-            f"💰 {event[4]} ₽",
+            f"🛶 {route_title}",
+            f"📅 {event_date}",
+            f"🕒 {event_time}",
+            f"📍 {start_point} → {finish_point}",
+            f"💰 {price} ₽",
             "",
         ])
-        keyboard.append(booking_keyboard(event[0]).inline_keyboard[0])
+        keyboard.append(booking_keyboard(event_id).inline_keyboard[0])
 
     keyboard.append([
         InlineKeyboardButton(text="⬅️ Главное меню", callback_data="menu_back")
