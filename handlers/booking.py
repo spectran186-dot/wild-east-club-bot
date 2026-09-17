@@ -80,6 +80,7 @@ async def get_phone(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "booking_confirm")
 async def booking_confirm(callback: CallbackQuery, state: FSMContext):
+    # Сразу подтверждаем нажатие Telegram, чтобы кнопка не зависала.
     await callback.answer()
 
     data = await state.get_data()
@@ -88,57 +89,71 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
     phone = data.get("phone")
 
     if not event_id or not full_name or not phone:
-        await callback.message.answer(
+        await callback.message.edit_text(
             "❌ Не удалось получить данные заявки.\n"
             "Пожалуйста, начните запись заново."
         )
         await state.clear()
         return
 
-    await db.add_booking(
-        telegram_id=callback.from_user.id,
-        event_id=event_id,
-        full_name=full_name,
-        phone=phone,
+    # Сразу убираем кнопки подтверждения, чтобы повторное нажатие
+    # не ставилось в очередь, пока выполняется запись в БД.
+    await callback.message.edit_text(
+        "⏳ Заявка отправляется...\n\n"
+        "Пожалуйста, подождите несколько секунд."
     )
 
-    event = await db.get_event_info(event_id)
+    try:
+        await db.add_booking(
+            telegram_id=callback.from_user.id,
+            event_id=event_id,
+            full_name=full_name,
+            phone=phone,
+        )
 
-    if event:
-        (
-            _event_id,
-            event_date,
-            event_time,
-            _price,
-            route_title,
-            _start_point,
-            _finish_point,
-        ) = event
+        event = await db.get_event_info(event_id)
 
-        try:
-            await callback.bot.send_message(
-                ADMIN_ID,
-                "🔔 НОВАЯ ЗАЯВКА!\n\n"
-                f"📅 Дата: {event_date}\n"
-                f"🕐 Время: {event_time}\n"
-                f"🛶 Маршрут: {route_title}\n\n"
-                f"👤 Имя: {full_name}\n"
-                f"📞 Телефон: {phone}\n"
-            )
-        except Exception:
-            # Заявка уже сохранена. Ошибка уведомления администратора
-            # не должна блокировать подтверждение пользователю.
-            pass
+        if event:
+            (
+                _event_id,
+                event_date,
+                event_time,
+                _price,
+                route_title,
+                _start_point,
+                _finish_point,
+            ) = event
 
-    await callback.message.answer(
-        "🎉 Спасибо!\n\n"
-        "Мы приняли вашу заявку на САП-сплав с командой Wild East Club!\n\n"
-        "Будем рады видеть вас на старте. 😉\n\n"
-        "В ближайшее время организатор свяжется с вами для подтверждения участия.\n\n"
-        "📞 +7 924 416-00-83"
-    )
+            try:
+                await callback.bot.send_message(
+                    ADMIN_ID,
+                    "🔔 НОВАЯ ЗАЯВКА!\n\n"
+                    f"📅 Дата: {event_date}\n"
+                    f"🕐 Время: {event_time}\n"
+                    f"🛶 Маршрут: {route_title}\n\n"
+                    f"👤 Имя: {full_name}\n"
+                    f"📞 Телефон: {phone}\n"
+                )
+            except Exception:
+                # Заявка уже сохранена. Ошибка уведомления администратора
+                # не должна блокировать подтверждение пользователю.
+                pass
 
-    await state.clear()
+        await callback.message.edit_text(
+            "🎉 Спасибо!\n\n"
+            "Мы приняли вашу заявку на САП-сплав с командой Wild East Club!\n\n"
+            "Будем рады видеть вас на старте. 😉\n\n"
+            "В ближайшее время организатор свяжется с вами для подтверждения участия.\n\n"
+            "📞 +7 924 416-00-83"
+        )
+    except Exception:
+        await callback.message.edit_text(
+            "⚠️ Не удалось отправить заявку.\n\n"
+            "Попробуйте ещё раз через несколько секунд."
+        )
+        raise
+    finally:
+        await state.clear()
 
 
 @router.callback_query(F.data == "booking_cancel")
@@ -146,7 +161,7 @@ async def booking_cancel(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.clear()
 
-    await callback.message.answer(
+    await callback.message.edit_text(
         "❌ Заявка отменена.\n\n"
         "Если захотите записаться — откройте раздел «📅 Мероприятия» ещё раз."
     )
