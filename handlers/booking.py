@@ -28,11 +28,13 @@ def booking_keyboard(event_id):
 
 @router.callback_query(F.data.startswith("book_"))
 async def booking(callback: CallbackQuery, state: FSMContext):
+    # Сразу подтверждаем callback и редактируем текущее сообщение.
+    # Новое сообщение здесь не создаём, чтобы переход не накапливался в очереди.
     await callback.answer()
 
     event_id = int(callback.data.split("_", 1)[1])
     await state.update_data(event_id=event_id)
-    await callback.message.answer("👤 Введите ваше имя:")
+    await callback.message.edit_text("👤 <b>Введите ваше имя:</b>", parse_mode="HTML")
     await state.set_state(BookingState.waiting_name)
 
 
@@ -80,7 +82,6 @@ async def get_phone(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "booking_confirm")
 async def booking_confirm(callback: CallbackQuery, state: FSMContext):
-    # Сразу подтверждаем нажатие Telegram, чтобы кнопка не зависала.
     await callback.answer()
 
     data = await state.get_data()
@@ -96,8 +97,6 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
         await state.clear()
         return
 
-    # Сразу убираем кнопки подтверждения, чтобы повторное нажатие
-    # не ставилось в очередь, пока выполняется запись в БД.
     await callback.message.edit_text(
         "⏳ Заявка отправляется...\n\n"
         "Пожалуйста, подождите несколько секунд."
@@ -135,8 +134,6 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
                     f"📞 Телефон: {phone}\n"
                 )
             except Exception:
-                # Заявка уже сохранена. Ошибка уведомления администратора
-                # не должна блокировать подтверждение пользователю.
                 pass
 
         await callback.message.edit_text(
