@@ -13,6 +13,7 @@ db = Database()
 ADMIN_ID = config.owner_id
 
 _event_cache = {}
+_pending_confirmations = set()
 
 
 def cache_event(event):
@@ -29,14 +30,8 @@ def booking_keyboard(event_id):
 
 def event_text(event):
     (
-        _event_id,
-        _route_id,
-        event_date,
-        event_time,
-        price,
-        route_title,
-        start_point,
-        finish_point,
+        _event_id, _route_id, event_date, event_time, price,
+        route_title, start_point, finish_point,
     ) = event
 
     return (
@@ -52,24 +47,28 @@ def event_text(event):
 
 @router.callback_query(F.data.startswith("book_"))
 async def booking(callback: CallbackQuery, state: FSMContext):
-    # Сразу убираем состояние загрузки на кнопке.
     await callback.answer()
 
     event_id = int(callback.data.split("_", 1)[1])
+    user_id = callback.from_user.id
+
+    if await db.has_booking(user_id, event_id):
+        await callback.message.edit_text(
+            "ℹ️ <b>Вы уже записаны на это мероприятие.</b>\n\n"
+            "Повторная заявка не требуется.\n"
+            "Если хотите изменить данные заявки — свяжитесь с организатором.",
+            parse_mode="HTML",
+        )
+        return
+
     event = _event_cache.get(event_id)
 
     if event is None:
         event_info = await db.get_event_info(event_id)
         if event_info:
             event = (
-                event_info[0],
-                None,
-                event_info[1],
-                event_info[2],
-                event_info[3],
-                event_info[4],
-                event_info[5],
-                event_info[6],
+                event_info[0], None, event_info[1], event_info[2], event_info[3],
+                event_info[4], event_info[5], event_info[6],
             )
             cache_event(event)
 
@@ -80,17 +79,9 @@ async def booking(callback: CallbackQuery, state: FSMContext):
         )
         return
 
-    # Сначала переключаем FSM, чтобы следующее сообщение пользователя
-    # гарантированно попало в обработчик имени.
     await state.update_data(event_id=event_id)
     await state.set_state(BookingState.waiting_name)
-
-    # Не создаём второе сообщение: редактируем то, на котором была нажата
-    # кнопка. Это устраняет рассинхронизацию сообщений при задержке Telegram.
-    await callback.message.edit_text(
-        event_text(event),
-        parse_mode="HTML",
-    )
+    await callback.message.edit_text(event_text(event), parse_mode="HTML")
 
 
 @router.message(BookingState.waiting_name)
@@ -113,15 +104,10 @@ async def get_name(message: Message, state: FSMContext):
 
 @router.message(BookingState.waiting_phone)
 async def get_phone(message: Message, state: FSMContext):
-    if message.contact:
-        phone = message.contact.phone_number
-    else:
-        phone = (message.text or "").strip()
+    phone = message.contact.phone_number if message.contact else (message.text or "").strip()
 
     if not phone:
-        await message.answer(
-            "Пожалуйста, отправьте номер телефона или введите его вручную."
-        )
+        await message.answer("Пожалуйста, отправьте номер телефона или введите его вручную.")
         return
 
     await state.update_data(phone=phone)
@@ -131,14 +117,8 @@ async def get_phone(message: Message, state: FSMContext):
     event_info = ""
     if event:
         (
-            _event_id,
-            _route_id,
-            event_date,
-            event_time,
-            price,
-            route_title,
-            start_point,
-            finish_point,
+            _event_id, _route_id, event_date, event_time, price,
+            route_title, start_point, finish_point,
         ) = event
         event_info = (
             f"🛶 Маршрут: {route_title}\n"
@@ -167,6 +147,8 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
     event_id = data.get("event_id")
     full_name = data.get("full_name")
     phone = data.get("phone")
+    user_id = callback.from_user.id
+    lock_key = (user_id, event_id)
 
     if not event_id or not full_name or not phone:
         await callback.message.answer(
@@ -176,14 +158,40 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
         await state.clear()
         return
 
+    if await db.has_booking(user_id, event_id):
+        await callback.message.edit_text(
+            "ℹ️ <b>Вы уже записаны на это мероприятие.</b>\n\n"
+            "Повторная заявка не создана.",
+            parse_mode="HTML",
+        )
+        await state.clear()
+        return
+
+    if lock_key in _pending_confirmations:
+        await callback.message.edit_text(
+            "⏳ Заявка уже отправляется.\n\nПожалуйста, подождите несколько секунд."
+        )
+        return
+
+    _pending_confirmations.add(lock_key)
+
     await callback.message.edit_text(
-        "⏳ Заявка отправляется...\n\n"
-        "Пожалуйста, подождите несколько секунд."
+        "⏳ Заявка отправляется...\n\nПожалуйста, подождите несколько секунд."
     )
 
     try:
+        # Повторная проверка непосредственно перед записью защищает от
+        # повторного подтверждения после задержки Telegram.
+        if await db.has_booking(user_id, event_id):
+            await callback.message.edit_text(
+                "ℹ️ <b>Вы уже записаны на это мероприятие.</b>\n\n"
+                "Повторная заявка не создана.",
+                parse_mode="HTML",
+            )
+            return
+
         await db.add_booking(
-            telegram_id=callback.from_user.id,
+            telegram_id=user_id,
             event_id=event_id,
             full_name=full_name,
             phone=phone,
@@ -192,14 +200,8 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
         event = _event_cache.get(event_id)
         if event:
             (
-                _event_id,
-                _route_id,
-                event_date,
-                event_time,
-                price,
-                route_title,
-                _start_point,
-                _finish_point,
+                _event_id, _route_id, event_date, event_time, price,
+                route_title, _start_point, _finish_point,
             ) = event
 
             try:
@@ -230,6 +232,7 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
         )
         raise
     finally:
+        _pending_confirmations.discard(lock_key)
         await state.clear()
 
 
