@@ -1,5 +1,3 @@
-import asyncio
-
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
@@ -97,15 +95,14 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
         await state.clear()
         return
 
-    await asyncio.to_thread(
-        db.add_booking,
+    await db.add_booking(
         telegram_id=callback.from_user.id,
         event_id=event_id,
         full_name=full_name,
         phone=phone,
     )
 
-    event = await asyncio.to_thread(db.get_event_info, event_id)
+    event = await db.get_event_info(event_id)
 
     if event:
         (
@@ -118,15 +115,20 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
             _finish_point,
         ) = event
 
-        await callback.bot.send_message(
-            ADMIN_ID,
-            "🔔 НОВАЯ ЗАЯВКА!\n\n"
-            f"📅 Дата: {event_date}\n"
-            f"🕐 Время: {event_time}\n"
-            f"🛶 Маршрут: {route_title}\n\n"
-            f"👤 Имя: {full_name}\n"
-            f"📞 Телефон: {phone}\n"
-        )
+        try:
+            await callback.bot.send_message(
+                ADMIN_ID,
+                "🔔 НОВАЯ ЗАЯВКА!\n\n"
+                f"📅 Дата: {event_date}\n"
+                f"🕐 Время: {event_time}\n"
+                f"🛶 Маршрут: {route_title}\n\n"
+                f"👤 Имя: {full_name}\n"
+                f"📞 Телефон: {phone}\n"
+            )
+        except Exception:
+            # Заявка уже сохранена. Ошибка уведомления администратора
+            # не должна блокировать подтверждение пользователю.
+            pass
 
     await callback.message.answer(
         "🎉 Спасибо!\n\n"
