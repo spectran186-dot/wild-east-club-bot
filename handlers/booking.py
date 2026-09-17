@@ -52,8 +52,7 @@ def event_text(event):
 
 @router.callback_query(F.data.startswith("book_"))
 async def booking(callback: CallbackQuery, state: FSMContext):
-    # В aiogram callback.answer() возвращает Telegram API метод, а не coroutine.
-    # Поэтому его нужно await-ить напрямую.
+    # Сразу убираем состояние загрузки на кнопке.
     await callback.answer()
 
     event_id = int(callback.data.split("_", 1)[1])
@@ -81,13 +80,14 @@ async def booking(callback: CallbackQuery, state: FSMContext):
         )
         return
 
-    # FSM переключаем до отправки ответа в Telegram.
+    # Сначала переключаем FSM, чтобы следующее сообщение пользователя
+    # гарантированно попало в обработчик имени.
     await state.update_data(event_id=event_id)
     await state.set_state(BookingState.waiting_name)
 
-    # Оставляем сообщение со списком мероприятий на месте,
-    # а запрос имени отправляем отдельным сообщением.
-    await callback.message.answer(
+    # Не создаём второе сообщение: редактируем то, на котором была нажата
+    # кнопка. Это устраняет рассинхронизацию сообщений при задержке Telegram.
+    await callback.message.edit_text(
         event_text(event),
         parse_mode="HTML",
     )
