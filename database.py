@@ -109,10 +109,19 @@ class Database:
         try:
             cursor = await connection.execute(
                 """
-                SELECT id, route_id, event_date, event_time, price
+                SELECT
+                    events.id,
+                    events.route_id,
+                    events.event_date,
+                    events.event_time,
+                    events.price,
+                    routes.title,
+                    routes.start_point,
+                    routes.finish_point
                 FROM events
-                WHERE status = 'active'
-                ORDER BY event_date, event_time
+                LEFT JOIN routes ON routes.id = events.route_id
+                WHERE events.status = 'active'
+                ORDER BY events.event_date, events.event_time
                 """
             )
             return await cursor.fetchall()
