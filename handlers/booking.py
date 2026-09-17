@@ -13,7 +13,6 @@ db = Database()
 ADMIN_ID = config.owner_id
 
 # Данные мероприятий, уже загруженные при показе списка.
-# Это позволяет открыть запись без повторного обращения к SQLite.
 _event_cache = {}
 
 
@@ -24,12 +23,7 @@ def cache_event(event):
 def booking_keyboard(event_id):
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="✅ Записаться",
-                    callback_data=f"book_{event_id}"
-                )
-            ]
+            [InlineKeyboardButton(text="✅ Записаться", callback_data=f"book_{event_id}")]
         ]
     )
 
@@ -59,15 +53,16 @@ def event_text(event):
 
 @router.callback_query(F.data.startswith("book_"))
 async def booking(callback: CallbackQuery, state: FSMContext):
-    # Отвечаем на callback первым действием, чтобы Telegram сразу убрал
-    # индикатор загрузки с кнопки.
+    # Telegram должен получить подтверждение callback сразу.
     await callback.answer()
 
     event_id = int(callback.data.split("_", 1)[1])
     event = _event_cache.get(event_id)
 
-    # Кэш нужен для быстрого перехода. Если пользователь нажал старую
-    # кнопку после перезапуска бота, один раз восстанавливаем данные из БД.
+    # Важный момент: состояние FSM устанавливаем ДО любых медленных
+    # Telegram API-вызовов. Если пользователь быстро введёт имя, оно уже
+    # попадёт в правильный обработчик, даже если Telegram ещё доставляет
+    # сообщение с деталями мероприятия.
     if event is None:
         event = await db.get_event_info(event_id)
         if event:
@@ -91,8 +86,9 @@ async def booking(callback: CallbackQuery, state: FSMContext):
         return
 
     await state.update_data(event_id=event_id)
-    await callback.message.answer(event_text(event), parse_mode="HTML")
     await state.set_state(BookingState.waiting_name)
+
+    await callback.message.answer(event_text(event), parse_mode="HTML")
 
 
 @router.message(BookingState.waiting_name)
@@ -104,12 +100,13 @@ async def get_name(message: Message, state: FSMContext):
         return
 
     await state.update_data(full_name=full_name)
+    await state.set_state(BookingState.waiting_phone)
+
     await message.answer(
         "📞 Отправьте номер телефона кнопкой ниже "
         "или введите его вручную в формате 7XXXXXXXXX:",
         reply_markup=phone_keyboard()
     )
-    await state.set_state(BookingState.waiting_phone)
 
 
 @router.message(BookingState.waiting_phone)
@@ -129,6 +126,7 @@ async def get_phone(message: Message, state: FSMContext):
     data = await state.get_data()
     event = _event_cache.get(data.get("event_id"))
 
+    event_info = ""
     if event:
         (
             _event_id,
@@ -147,8 +145,6 @@ async def get_phone(message: Message, state: FSMContext):
             f"📍 {start_point} → {finish_point}\n"
             f"💰 Стоимость: {price} ₽\n\n"
         )
-    else:
-        event_info = ""
 
     await message.answer(
         "📋 <b>Проверьте данные заявки</b>\n\n"
