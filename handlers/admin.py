@@ -1,5 +1,3 @@
-import asyncio
-
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
@@ -56,10 +54,8 @@ async def admin_bookings(callback: CallbackQuery):
         await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    # Подтверждаем нажатие сразу, чтобы Telegram не показывал зависшую кнопку.
     await callback.answer()
-
-    bookings = await asyncio.to_thread(db.get_bookings)
+    bookings = await db.get_bookings()
 
     if not bookings:
         await callback.message.answer("📋 Заявок пока нет.")
@@ -90,7 +86,6 @@ async def admin_bookings(callback: CallbackQuery):
 
     text = "\n".join(lines)
 
-    # Telegram ограничивает сообщение 4096 символами.
     for start in range(0, len(text), 4000):
         await callback.message.answer(
             text[start:start + 4000],
@@ -105,8 +100,7 @@ async def admin_events(callback: CallbackQuery):
         return
 
     await callback.answer()
-
-    events = await asyncio.to_thread(db.get_events)
+    events = await db.get_events()
     keyboard = []
 
     for event in events:
