@@ -1,22 +1,19 @@
+import asyncio
+
 from aiogram import Router, F
-from aiogram.types import (
-    Message,
-    CallbackQuery,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-)
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
+from config import config
 from states.booking import BookingState
-
 from database import Database
-
 from keyboards.booking import phone_keyboard
 from keyboards.booking_confirm import booking_confirm_keyboard
 
 router = Router()
 db = Database()
-ADMIN_ID = 323262204
+ADMIN_ID = config.owner_id
+
 
 def booking_keyboard(event_id):
     return InlineKeyboardMarkup(
@@ -33,80 +30,61 @@ def booking_keyboard(event_id):
 
 @router.callback_query(F.data.startswith("book_"))
 async def booking(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
 
-    event_id = int(callback.data.split("_")[1])
-
-    # Сохраняем ID мероприятия
+    event_id = int(callback.data.split("_", 1)[1])
     await state.update_data(event_id=event_id)
-
-    await callback.message.answer(
-        "👤 Введите ваше имя:"
-    )
-
+    await callback.message.answer("👤 Введите ваше имя:")
     await state.set_state(BookingState.waiting_name)
 
-    await callback.answer()
 
 @router.message(BookingState.waiting_name)
 async def get_name(message: Message, state: FSMContext):
-
-    full_name = message.text.strip()
+    full_name = (message.text or "").strip()
 
     if not full_name:
-        await message.answer(
-            "Пожалуйста, введите ваше имя."
-        )
+        await message.answer("Пожалуйста, введите ваше имя.")
         return
 
-    await state.update_data(
-        full_name=full_name
-    )
-
+    await state.update_data(full_name=full_name)
     await message.answer(
         "📞 Отправьте номер телефона кнопкой ниже "
         "или введите его вручную в формате 7XXXXXXXXX:",
         reply_markup=phone_keyboard()
     )
+    await state.set_state(BookingState.waiting_phone)
 
-    await state.set_state(
-        BookingState.waiting_phone
-    )
 
 @router.message(BookingState.waiting_phone)
 async def get_phone(message: Message, state: FSMContext):
-
     if message.contact:
         phone = message.contact.phone_number
     else:
-        phone = message.text.strip() if message.text else ""
+        phone = (message.text or "").strip()
 
     if not phone:
         await message.answer(
-            "Пожалуйста, отправьте номер телефона "
-            "или введите его вручную."
+            "Пожалуйста, отправьте номер телефона или введите его вручную."
         )
         return
 
-    await state.update_data(
-        phone=phone
-    )
-
+    await state.update_data(phone=phone)
     data = await state.get_data()
 
     await message.answer(
-    "📋 Проверьте данные заявки:\n\n"
-    f"👤 Имя: {data['full_name']}\n"
-    f"📞 Телефон: {phone}\n\n"
-    "Всё верно?",
-    reply_markup=booking_confirm_keyboard()
-   )
-@router.callback_query(F.data == "booking_confirm")
-async def booking_confirm(
-    callback: CallbackQuery,
-    state: FSMContext
-):
-    data = await state.get_data()
+        "📋 Проверьте данные заявки:\n\n"
+        f"👤 Имя: {data['full_name']}\n"
+        f"📞 Телефон: {phone}\n\n"
+        "Всё верно?",
+        reply_markup=booking_confirm_keyboard()
+    )
 
+
+@router.callback_query(F.data == "booking_confirm")
+async def booking_confirm(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+
+    data = await state.get_data()
     event_id = data.get("event_id")
     full_name = data.get("full_name")
     phone = data.get("phone")
@@ -117,26 +95,27 @@ async def booking_confirm(
             "Пожалуйста, начните запись заново."
         )
         await state.clear()
-        await callback.answer()
         return
 
-    # Сохраняем заявку в базу
-    db.add_booking(
+    await asyncio.to_thread(
+        db.add_booking,
         telegram_id=callback.from_user.id,
         event_id=event_id,
         full_name=full_name,
-        phone=phone
+        phone=phone,
     )
 
-    # Получаем информацию о мероприятии
-    event = db.get_event_info(event_id)
+    event = await asyncio.to_thread(db.get_event_info, event_id)
 
-    # Уведомление организатору
     if event:
         (
+            _event_id,
             event_date,
             event_time,
-            route_title
+            _price,
+            route_title,
+            _start_point,
+            _finish_point,
         ) = event
 
         await callback.bot.send_message(
@@ -149,31 +128,23 @@ async def booking_confirm(
             f"📞 Телефон: {phone}\n"
         )
 
-    # Ответ туристу
     await callback.message.answer(
         "🎉 Спасибо!\n\n"
-        "Мы приняли вашу заявку на САП-сплав "
-        "с командой Wild East Club!\n\n"
+        "Мы приняли вашу заявку на САП-сплав с командой Wild East Club!\n\n"
         "Будем рады видеть вас на старте. 😉\n\n"
-        "В ближайшее время организатор свяжется "
-        "с вами для подтверждения участия.\n\n"
+        "В ближайшее время организатор свяжется с вами для подтверждения участия.\n\n"
         "📞 +7 924 416-00-83"
     )
 
     await state.clear()
-    await callback.answer()
+
 
 @router.callback_query(F.data == "booking_cancel")
-async def booking_cancel(
-    callback: CallbackQuery,
-    state: FSMContext
-):
+async def booking_cancel(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
     await state.clear()
 
     await callback.message.answer(
         "❌ Заявка отменена.\n\n"
-        "Если захотите записаться — "
-        "откройте раздел «📅 Мероприятия» ещё раз."
+        "Если захотите записаться — откройте раздел «📅 Мероприятия» ещё раз."
     )
-
-    await callback.answer()
