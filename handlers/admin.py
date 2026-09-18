@@ -62,9 +62,8 @@ async def booking_card_keyboard(booking):
             InlineKeyboardButton(text="❌ Отменить", callback_data=f"booking_status_cancelled_{booking_id}"),
         ])
 
-    phone_digits = "".join(ch for ch in phone if ch.isdigit())
     buttons.append([
-        InlineKeyboardButton(text="📞 Позвонить", url=f"tel:+{phone_digits}"),
+        InlineKeyboardButton(text="📞 Позвонить", callback_data=f"booking_phone_{booking_id}"),
         InlineKeyboardButton(text="💬 Написать", url=f"tg://user?id={telegram_id}"),
     ])
     buttons.append([
@@ -237,6 +236,23 @@ async def booking_status(callback: CallbackQuery):
         else "Заявка снова активна"
     )
     await show_booking_by_id(callback, booking_id)
+
+
+@router.callback_query(F.data.regexp(r"^booking_phone_\d+$"))
+async def booking_phone(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    booking_id = int(callback.data.split("_")[2])
+    bookings = await db.get_bookings()
+    booking = next((item for item in bookings if item[0] == booking_id), None)
+
+    if booking is None:
+        await callback.answer("⚠️ Заявка не найдена", show_alert=True)
+        return
+
+    await callback.answer(f"📞 {booking[4]}", show_alert=True)
 
 
 @router.callback_query(F.data.regexp(r"^booking_(next|prev)_\d+$"))
