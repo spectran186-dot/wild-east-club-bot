@@ -252,6 +252,7 @@ async def save_edit_field(message, state, field, value):
         await state.clear()
         await message.answer("⚠️ Мероприятие не найдено. Начните редактирование заново.")
         return
+
     data[field] = value
     await db.update_event(
         event_id, data["route_id"], data["event_date"], data["event_time"],
@@ -259,7 +260,14 @@ async def save_edit_field(message, state, field, value):
     )
     await state.update_data(**{field: value})
     await state.set_state(AdminEventState.edit_waiting_route)
-    await message.answer("✅ Изменение сохранено.", reply_markup=edit_fields_keyboard())
+
+    updated_data = await state.get_data()
+    await message.answer(
+        "✅ <b>Изменение сохранено.</b>\n\n"
+        + edit_event_text(updated_data),
+        reply_markup=edit_fields_keyboard(),
+        parse_mode="HTML",
+    )
 
 
 @router.callback_query(F.data == "edit_field_date")
