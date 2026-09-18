@@ -63,6 +63,17 @@ class Database:
         finally:
             await connection.close()
 
+    async def update_event(self, event_id, route_id, event_date, event_time, price, meeting_point):
+        connection = await self._connect()
+        try:
+            await connection.execute(
+                "UPDATE events SET route_id = ?, event_date = ?, event_time = ?, price = ?, meeting_point = ? WHERE id = ?",
+                (route_id, event_date, event_time, price, meeting_point, event_id),
+            )
+            await connection.commit()
+        finally:
+            await connection.close()
+
     async def has_booking(self, event_id, full_name, phone):
         connection = await self._connect()
         try:
