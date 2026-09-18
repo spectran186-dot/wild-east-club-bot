@@ -52,7 +52,19 @@ jobs:
           PY
 
           if [ ! -s /tmp/dbid ]; then
-            wrangler d1 create wild-east-club --location=weur --json > /tmp/create.json
+            wrangler d1 create wild-east-club --location=weur > /tmp/create.txt
+            cat /tmp/create.txt
+            python - <<'PY'
+            import re
+            from pathlib import Path
+            s=Path("/tmp/create.txt").read_text()
+            m=re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}", s)
+            if not m:
+                raise SystemExit("Could not determine newly created D1 database ID from Wrangler output")
+            Path("/tmp/dbid").write_text(m.group(0))
+            PY
+            exit 0
+            #
             python - <<'PY'
           import json
           data=json.load(open("/tmp/create.json"))
