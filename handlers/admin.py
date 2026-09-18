@@ -154,67 +154,60 @@ async def show_bookings(callback: CallbackQuery):
     )
 
 
-async def show_event_bookings(callback: CallbackQuery, event_id: int):
+async def show_event_bookings(callback: CallbackQuery, event_id: int, page: int = 0):
     bookings = [b for b in await db.get_bookings() if b[1] == event_id]
-
     if not bookings:
         await callback.answer("⚠️ Заявок по мероприятию нет", show_alert=True)
         return
 
     first = bookings[0]
     event_date, event_time, route_title = first[6], first[7], first[8]
-    date_display = (
-        f"{event_date[8:10]}.{event_date[5:7]}.{event_date[:4]}"
-        if event_date else "—"
-    )
+    date_display = f"{event_date[8:10]}.{event_date[5:7]}.{event_date[:4]}" if event_date else "—"
     booked_count, max_places = await db.get_event_booking_stats(event_id)
 
-    # Каждая заявка — отдельное сообщение-карточка
-    for booking in bookings:
+    page_size = 10
+    total_pages = max(1, (len(bookings) + page_size - 1) // page_size)
+    page = max(0, min(page, total_pages - 1))
+    page_bookings = bookings[page * page_size:(page + 1) * page_size]
+
+    await callback.message.edit_text(
+        f"📋 <b>{route_title or 'Мероприятие'}</b>\n"
+        f"📅 {date_display}  🕒 {event_time or '—'}\n"
+        f"Заявок: <b>{booked_count} / {max_places}</b>\n"
+        f"Страница <b>{page + 1}/{total_pages}</b>",
+        parse_mode="HTML",
+    )
+
+    for booking in page_bookings:
         (
             booking_id, _event_id, _telegram_id, full_name, phone, _created_at,
             _event_date, _event_time, _route_title, children, comment, status, _max_places,
         ) = booking
-
         lines = [
-            f"👤 <b>{full_name}</b>",
-            "",
-            f"📞 {phone}",
+            f"👤 <b>{full_name}</b>", "", f"📞 {phone}",
             f"🛶 {route_title or 'Маршрут не указан'}",
-            f"📅 {date_display}",
-            f"🕒 {event_time or '—'}",
+            f"📅 {date_display}", f"🕒 {event_time or '—'}",
             f"👶 Ребёнок: {'да' if children else 'нет'}",
         ]
         if comment:
             lines.append(f"💬 Комментарий: {comment}")
-
-        lines.extend([
-            "",
-            booking_status_label(status),
-            "",
-            f"<b>Заявки: {booked_count} / {max_places}</b>",
-        ])
-
+        lines.extend(["", booking_status_label(status), "", f"<b>Заявки: {booked_count} / {max_places}</b>"])
         await callback.message.answer(
             "\n".join(lines),
             reply_markup=await booking_card_keyboard(booking),
             parse_mode="HTML",
         )
 
-    await callback.message.edit_text(
-        f"📋 <b>{route_title or 'Мероприятие'}</b>\n"
-        f"📅 {date_display}  🕒 {event_time or '—'}\n\n"
-        f"Заявок: <b>{booked_count} / {max_places}</b>",
-        parse_mode="HTML",
-    )
-
-    # Кнопка возврата отправляется отдельным сообщением после всех карточек,
-    # чтобы визуально находиться в самом низу списка.
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="⬅️ Предыдущая", callback_data=f"booking_page_{event_id}_{page - 1}"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton(text="Следующая ➡️", callback_data=f"booking_page_{event_id}_{page + 1}"))
+    keyboard = [nav] if nav else []
+    keyboard.append([InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="admin_bookings")])
     await callback.message.answer(
-        "⬅️ Вернуться назад",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="admin_bookings")]
-        ]),
+        f"Страница {page + 1} из {total_pages}",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
     )
 
 async def show_events(callback: CallbackQuery):
@@ -260,6 +253,20 @@ async def admin_back(callback: CallbackQuery):
         reply_markup=admin_keyboard(),
     )
 
+
+@router.callback_query(F.data.regexp(r"^booking_page_\d+_\d+$"))
+async def booking_page(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    parts = callback.data.split("_")
+    event_id, page = int(parts[2]), int(parts[3])
+    await callback.answer()
+    try:
+        await show_event_bookings(callback, event_id, page)
+    except Exception:
+        logger.exception("Failed to load booking page")
+        await callback.message.edit_text("⚠️ Не удалось загрузить страницу заявок.", reply_markup=back_keyboard())
 
 @router.callback_query(F.data.regexp(r"^booking_event_\d+$"))
 async def booking_event(callback: CallbackQuery):
