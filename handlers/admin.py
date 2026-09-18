@@ -51,21 +51,21 @@ async def admin_panel(message: Message):
 async def booking_card_keyboard(booking):
     booking_id, event_id, telegram_id, full_name, phone, created_at, event_date, event_time, route_title, children, comment, status, max_places = booking
 
-    if status == "new":
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="✅ Подтвердить",
-                    callback_data=f"booking_status_confirmed_{booking_id}",
-                ),
-                InlineKeyboardButton(
-                    text="❌ Отменить",
-                    callback_data=f"booking_status_cancelled_{booking_id}",
-                ),
-            ]
-        ])
+    if status != "new":
+        return InlineKeyboardMarkup(inline_keyboard=[])
 
-    return InlineKeyboardMarkup(inline_keyboard=[])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Подтвердить",
+                callback_data=f"booking_status_confirmed_{booking_id}",
+            ),
+            InlineKeyboardButton(
+                text="❌ Отменить",
+                callback_data=f"booking_status_cancelled_{booking_id}",
+            ),
+        ]
+    ])
 
 
 def booking_status_label(status):
@@ -197,6 +197,7 @@ async def show_event_bookings(callback: CallbackQuery, event_id: int):
 
         await callback.message.answer(
             "\n".join(lines),
+            reply_markup=await booking_card_keyboard(booking),
             parse_mode="HTML",
         )
 
@@ -204,10 +205,16 @@ async def show_event_bookings(callback: CallbackQuery, event_id: int):
         f"📋 <b>{route_title or 'Мероприятие'}</b>\n"
         f"📅 {date_display}  🕒 {event_time or '—'}\n\n"
         f"Заявок: <b>{booked_count} / {max_places}</b>",
+        parse_mode="HTML",
+    )
+
+    # Кнопка возврата отправляется отдельным сообщением после всех карточек,
+    # чтобы визуально находиться в самом низу списка.
+    await callback.message.answer(
+        "⬅️ Вернуться назад",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="admin_bookings")]
         ]),
-        parse_mode="HTML",
     )
 
 async def show_events(callback: CallbackQuery):
