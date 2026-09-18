@@ -303,7 +303,7 @@ async def admin_bookings(callback: CallbackQuery):
         )
 
 
-@router.callback_query(F.data.regexp(r"^booking_status_(confirmed|cancelled)_\\d+$"))
+@router.callback_query(F.data.regexp(r"^booking_status_(confirmed|cancelled)_\d+$"))
 async def booking_status(callback: CallbackQuery):
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Нет доступа", show_alert=True)
