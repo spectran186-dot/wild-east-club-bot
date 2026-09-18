@@ -239,7 +239,7 @@ async def booking_status(callback: CallbackQuery):
     await show_booking_by_id(callback, booking_id)
 
 
-@router.callback_query(F.data.regexp(r"^booking_(next|prev)_\\d+$"))
+@router.callback_query(F.data.regexp(r"^booking_(next|prev)_\d+$"))
 async def booking_navigation(callback: CallbackQuery):
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Нет доступа", show_alert=True)
