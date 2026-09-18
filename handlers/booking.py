@@ -16,6 +16,19 @@ _event_cache = {}
 _pending_confirmations = set()
 
 
+
+def normalize_phone(phone):
+    """Приводит российский номер к единому формату +7XXXXXXXXXX."""
+    digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
+    if digits.startswith("8") and len(digits) == 11:
+        digits = "7" + digits[1:]
+    elif len(digits) == 10:
+        digits = "7" + digits
+    elif not (digits.startswith("7") and len(digits) == 11):
+        return None
+    return f"+{digits}"
+
+
 def cache_event(event):
     _event_cache[event[0]] = event
 
@@ -100,8 +113,15 @@ async def get_name(message: Message, state: FSMContext):
 async def get_phone(message: Message, state: FSMContext):
     phone = message.contact.phone_number if message.contact else (message.text or "").strip()
 
+    phone = normalize_phone(phone)
+
     if not phone:
-        await message.answer("Пожалуйста, отправьте номер телефона или введите его вручную.")
+        await message.answer(
+            "⚠️ Не удалось распознать номер телефона.\n\n"
+            "Введите российский номер из 10 цифр, например: <code>9244160083</code>, "
+            "<code>89244160083</code> или <code>+79244160083</code>.",
+            parse_mode="HTML",
+        )
         return
 
     await state.update_data(phone=phone, child_added=False, comment="")
