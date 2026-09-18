@@ -64,6 +64,8 @@ async def show_bookings(callback: CallbackQuery):
                 event_date,
                 event_time,
                 route_title,
+                children,
+                comment,
             ) = booking
 
             lines.extend([
@@ -73,7 +75,12 @@ async def show_bookings(callback: CallbackQuery):
                 f"📅 {event_date}  {event_time}",
                 f"🛶 {route_title}",
                 f"🕐 Создана: {created_at}",
-                "──────────────",
+            ])
+            if children:
+                lines.append("👶 Ребенок с вами на SUP: +500 ₽")
+            if comment:
+                lines.append(f"💬 Комментарий: {comment}")
+            lines.append("──────────────",
             ])
         text = "\n".join(lines)
 
