@@ -11,3 +11,6 @@ class AdminEventState(StatesGroup):
     edit_waiting_time = State()
     edit_waiting_price = State()
     edit_waiting_meeting_point = State()
+    manual_booking_name = State()
+    manual_booking_phone = State()
+    manual_booking_child = State()
