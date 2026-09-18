@@ -93,10 +93,13 @@ class Database:
         finally:
             await connection.close()
 
-    async def add_booking(self, telegram_id, event_id, full_name, phone):
+    async def add_booking(self, telegram_id, event_id, full_name, phone, children=0, comment=""):
         connection = await self._connect()
         try:
-            await connection.execute("INSERT INTO bookings (telegram_id, event_id, full_name, phone, created_at) VALUES (?, ?, ?, ?, ?)", (telegram_id, event_id, full_name, phone, datetime.now().strftime("%Y-%m-%d %H:%M")))
+            await connection.execute(
+                "INSERT INTO bookings (telegram_id, event_id, full_name, phone, children, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (telegram_id, event_id, full_name, phone, children, comment, datetime.now().strftime("%Y-%m-%d %H:%M")),
+            )
             await connection.commit()
         finally:
             await connection.close()
