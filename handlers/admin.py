@@ -89,10 +89,10 @@ async def show_events(callback: CallbackQuery):
     keyboard = []
 
     for event in events:
-        event_id, route_id, event_date, event_time, price = event
+        event_id, route_id, event_date, event_time, price, route_title, start_point, finish_point = event
         keyboard.append([
             InlineKeyboardButton(
-                text=f"✏️ {event_date} {event_time}",
+                text=f"✏️ {event_date} {event_time} — {route_title}",
                 callback_data=f"edit_event_{event_id}",
             )
         ])
@@ -174,13 +174,3 @@ async def edit_event_placeholder(callback: CallbackQuery):
     )
 
 
-@router.callback_query(F.data == "add_event")
-async def add_event_placeholder(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("⛔ Нет доступа", show_alert=True)
-        return
-
-    await callback.answer(
-        "➕ Создание мероприятий пока не реализовано.",
-        show_alert=True,
-    )
