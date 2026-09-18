@@ -172,8 +172,45 @@ class Database:
     async def get_bookings(self):
         connection = await self._connect()
         try:
-            cursor = await connection.execute("SELECT bookings.id, bookings.full_name, bookings.phone, bookings.created_at, events.event_date, events.event_time, routes.title, bookings.children, bookings.comment FROM bookings LEFT JOIN events ON events.id = bookings.event_id LEFT JOIN routes ON routes.id = events.route_id ORDER BY bookings.id DESC")
+            cursor = await connection.execute(
+                """SELECT bookings.id, bookings.event_id, bookings.telegram_id, bookings.full_name,
+                          bookings.phone, bookings.created_at, events.event_date, events.event_time,
+                          routes.title, bookings.children, bookings.comment, bookings.status,
+                          events.max_places
+                   FROM bookings
+                   LEFT JOIN events ON events.id = bookings.event_id
+                   LEFT JOIN routes ON routes.id = events.route_id
+                   ORDER BY bookings.id DESC"""
+            )
             return await cursor.fetchall()
+        finally:
+            await connection.close()
+
+    async def update_booking_status(self, booking_id, status):
+        connection = await self._connect()
+        try:
+            await connection.execute(
+                "UPDATE bookings SET status = ? WHERE id = ?",
+                (status, booking_id),
+            )
+            await connection.commit()
+        finally:
+            await connection.close()
+
+    async def get_event_booking_stats(self, event_id):
+        connection = await self._connect()
+        try:
+            cursor = await connection.execute(
+                """SELECT
+                       COUNT(CASE WHEN status NOT IN ('cancelled', 'canceled') THEN 1 END),
+                       COALESCE(MAX(events.max_places), 10)
+                   FROM bookings
+                   LEFT JOIN events ON events.id = bookings.event_id
+                   WHERE bookings.event_id = ?""",
+                (event_id,),
+            )
+            row = await cursor.fetchone()
+            return row[0], row[1]
         finally:
             await connection.close()
 
