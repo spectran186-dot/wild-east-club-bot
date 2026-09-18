@@ -81,7 +81,7 @@ async def booking_card_keyboard(booking):
     buttons.append([
         InlineKeyboardButton(
             text="⬅️ Вернуться назад",
-            callback_data=f"booking_event_{event_id}",
+            callback_data="admin_bookings",
         )
     ])
 
