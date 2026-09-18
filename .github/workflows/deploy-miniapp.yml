@@ -43,10 +43,10 @@ jobs:
           from pathlib import Path
           import re, subprocess, tempfile
           html=Path("../miniapp/index.html").read_text(encoding="utf-8")
-          scripts=re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", html, re.S)
+          scripts=re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.S)
           if not scripts:
               raise SystemExit("No inline JavaScript found in Mini App")
-          js="\\n".join(scripts)
+          js="\n".join(scripts)
           Path("/tmp/miniapp.js").write_text(js,encoding="utf-8")
           PY
           node --check /tmp/miniapp.js
