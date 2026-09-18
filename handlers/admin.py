@@ -67,7 +67,11 @@ async def booking_card_keyboard(booking):
         InlineKeyboardButton(text="📞 Позвонить", url=f"tel:+{phone_digits}"),
         InlineKeyboardButton(text="💬 Написать", url=f"tg://user?id={telegram_id}"),
     ])
-    buttons.append([InlineKeyboardButton(text="⬅️ К списку заявок", callback_data="admin_bookings")])
+    buttons.append([
+        InlineKeyboardButton(text="⬅️ Предыдущая", callback_data=f"booking_prev_{booking_id}"),
+        InlineKeyboardButton(text="Следующая ➡️", callback_data=f"booking_next_{booking_id}"),
+    ])
+    buttons.append([InlineKeyboardButton(text="🏠 Админ-панель", callback_data="admin_back")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -133,14 +137,20 @@ async def show_bookings(callback: CallbackQuery):
     )
 
 
-async def show_booking_by_id(callback: CallbackQuery, booking_id: int):
+async def show_booking_by_id(callback: CallbackQuery, booking_id: int, direction=None):
     bookings = await db.get_bookings()
-    booking = next((item for item in bookings if item[0] == booking_id), None)
+    index = next((i for i, item in enumerate(bookings) if item[0] == booking_id), None)
 
-    if not booking:
+    if index is None:
         await callback.answer("⚠️ Заявка не найдена", show_alert=True)
         return
 
+    if direction == "next":
+        index = (index + 1) % len(bookings)
+    elif direction == "prev":
+        index = (index - 1) % len(bookings)
+
+    booking = bookings[index]
     booked_count, max_places = await db.get_event_booking_stats(booking[1])
     await callback.message.edit_text(
         format_booking_card(booking, booked_count, max_places),
@@ -210,7 +220,7 @@ async def admin_bookings(callback: CallbackQuery):
         )
 
 
-@router.callback_query(F.data.regexp(r"^booking_status_(new|confirmed|cancelled)_\\d+$"))
+@router.callback_query(F.data.regexp(r"^booking_status_(new|confirmed|cancelled)_\d+$"))
 async def booking_status(callback: CallbackQuery):
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Нет доступа", show_alert=True)
@@ -227,6 +237,17 @@ async def booking_status(callback: CallbackQuery):
         else "Заявка снова активна"
     )
     await show_booking_by_id(callback, booking_id)
+
+
+@router.callback_query(F.data.regexp(r"^booking_(next|prev)_\\d+$"))
+async def booking_navigation(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    direction = callback.data.split("_")[1]
+    booking_id = int(callback.data.split("_")[2])
+    await callback.answer()
+    await show_booking_by_id(callback, booking_id, direction)
 
 
 @router.callback_query(F.data == "admin_events")
