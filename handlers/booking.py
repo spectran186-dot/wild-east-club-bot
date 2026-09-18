@@ -182,7 +182,7 @@ async def booking_comment(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.set_state(BookingState.waiting_comment)
     await callback.message.answer(
-        "💬 <b>Введите комментарий к заявке:</b>\\n\\n"
+        "💬 <b>Введите комментарий к заявке:</b>\n\n"
         "Например: пожелания, особенности участия или другая важная информация.",
         parse_mode="HTML",
     )
@@ -224,7 +224,7 @@ async def booking_add_participant(callback: CallbackQuery, state: FSMContext):
     )
     await state.set_state(BookingState.waiting_name)
     await callback.message.answer(
-        "👤 <b>Введите имя следующего участника:</b>\\n\\n"
+        "👤 <b>Введите имя следующего участника:</b>\n\n"
         "Можно указать имя и фамилию.",
         parse_mode="HTML",
     )
@@ -249,7 +249,7 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
 
     if not event_id or not participants:
         await callback.message.answer(
-            "❌ Не удалось получить данные заявки.\\n"
+            "❌ Не удалось получить данные заявки.\n"
             "Пожалуйста, начните запись заново."
         )
         await state.clear()
@@ -260,9 +260,9 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
     for participant in participants:
         if await db.has_booking(event_id, participant["full_name"], participant["phone"]):
             await callback.message.edit_text(
-                "ℹ️ <b>Такая заявка уже существует.</b>\\n\\n"
-                f"👤 Имя: {participant['full_name']}\\n"
-                f"📞 Телефон: {participant['phone']}\\n\\n"
+                "ℹ️ <b>Такая заявка уже существует.</b>\n\n"
+                f"👤 Имя: {participant['full_name']}\n"
+                f"📞 Телефон: {participant['phone']}\n\n"
                 "Для этого мероприятия заявка с такими данными уже была создана.",
                 parse_mode="HTML",
             )
@@ -270,13 +270,13 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
 
     if lock_key in _pending_confirmations:
         await callback.message.edit_text(
-            "⏳ Заявка уже отправляется.\\n\\nПожалуйста, подождите несколько секунд."
+            "⏳ Заявка уже отправляется.\n\nПожалуйста, подождите несколько секунд."
         )
         return
 
     _pending_confirmations.add(lock_key)
     await callback.message.edit_text(
-        "⏳ Заявка отправляется...\\n\\nПожалуйста, подождите несколько секунд."
+        "⏳ Заявка отправляется...\n\nПожалуйста, подождите несколько секунд."
     )
 
     try:
@@ -284,7 +284,7 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
         for participant in participants:
             if await db.has_booking(event_id, participant["full_name"], participant["phone"]):
                 await callback.message.edit_text(
-                    "ℹ️ <b>Одна из заявок уже существует.</b>\\n\\n"
+                    "ℹ️ <b>Одна из заявок уже существует.</b>\n\n"
                     "Повторная заявка не создана.",
                     parse_mode="HTML",
                 )
@@ -311,7 +311,7 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
 
             try:
                 notification_lines = [
-                    "🔔 НОВЫЕ ЗАЯВКИ!\\n",
+                    "🔔 НОВЫЕ ЗАЯВКИ!\n",
                     f"📅 Дата: {event_date}",
                     f"🕐 Время: {event_time}",
                     f"🛶 Маршрут: {route_title}",
@@ -332,23 +332,23 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
                     notification_lines.append("")
 
                 notification_lines.append(f"💰 Итого: {total} ₽")
-                await callback.bot.send_message(ADMIN_ID, "\\n".join(notification_lines))
+                await callback.bot.send_message(ADMIN_ID, "\n".join(notification_lines))
             except Exception:
                 pass
 
         total = sum(base_price + (500 if p["children"] else 0) for p in participants)
         await callback.message.edit_text(
-            "🎉 <b>Заявка принята!</b>\\n\\n"
-            f"Участников: {len(participants)}\\n"
-            f"💰 Итого: {total} ₽\\n\\n"
-            "Мы приняли вашу заявку на САП-сплав с командой Wild East Club.\\n\\n"
-            "В ближайшее время организатор свяжется с вами для подтверждения участия.\\n\\n"
+            "🎉 <b>Заявка принята!</b>\n\n"
+            f"Участников: {len(participants)}\n"
+            f"💰 Итого: {total} ₽\n\n"
+            "Мы приняли вашу заявку на САП-сплав с командой Wild East Club.\n\n"
+            "В ближайшее время организатор свяжется с вами для подтверждения участия.\n\n"
             "📞 +7 924 416-00-83",
             parse_mode="HTML",
         )
     except Exception:
         await callback.message.edit_text(
-            "⚠️ Не удалось отправить заявку.\\n\\n"
+            "⚠️ Не удалось отправить заявку.\n\n"
             "Попробуйте ещё раз через несколько секунд."
         )
         raise
