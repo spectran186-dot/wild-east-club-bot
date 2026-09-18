@@ -12,4 +12,4 @@ database_name = "wild-east-club"
 database_id = "REPLACE_WITH_D1_DATABASE_ID"
 
 [vars]
-ADMIN_ID = "REPLACE_WITH_TELEGRAM_OWNER_ID"
+ADMIN_ID = "462776734"
