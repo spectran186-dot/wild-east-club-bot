@@ -49,29 +49,32 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: wrangler deploy
-
-      - name: Show Worker URL
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          URL=$(wrangler deployments list --json 2>/dev/null | node -e '
-            let s="";
-            process.stdin.on("data",d=>s+=d).on("end",()=>{
-              try {
-                const x=JSON.parse(s);
-                const url=x?.[0]?.url || x?.deployments?.[0]?.url || "";
-                process.stdout.write(url);
-              } catch(e) {}
-            });
-          ')
-          if [ -n "$URL" ]; then
-            echo "### 🚀 Worker deployed" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**Worker URL:** $URL" >> "$GITHUB_STEP_SUMMARY"
-            echo "$URL" 
-          else
-            echo "Worker deployed, but URL was not returned by Wrangler."
-            echo "Check the Deploy Worker output above for the workers.dev URL."
+          set -o pipefail
+          wrangler deploy 2>&1 | tee deploy.log
+          URL=$(grep -oE 'https://[A-Za-z0-9._-]+\.workers\.dev' deploy.log | head -n 1)
+          if [ -z "$URL" ]; then
+            echo "Worker deployed, but workers.dev URL was not found in Wrangler output."
+            exit 1
           fi
+          echo "WORKER_URL=$URL" >> "$GITHUB_ENV"
+          echo "### 🚀 Worker deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Worker URL:** $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "**API test:** $URL/api/events" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify live API
+        env:
+          WORKER_URL: ${{ env.WORKER_URL }}
+        run: |
+          echo "Testing $WORKER_URL/api/events"
+          HTTP_CODE=$(curl -sS -o api-response.json -w "%{http_code}" "$WORKER_URL/api/events")
+          echo "HTTP status: $HTTP_CODE"
+          cat api-response.json
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Live API check failed."
+            exit 1
+          fi
+          echo "### ✅ Live API check passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**GET /api/events:** HTTP $HTTP_CODE" >> "$GITHUB_STEP_SUMMARY"
