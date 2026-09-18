@@ -1,0 +1,119 @@
+name: Provision Wild East Club D1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/mini-app-cloudflare-2026-09-18
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@latest
+
+      - name: Check existing D1
+        id: check
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -e
+          wrangler d1 list --json > /tmp/d1.json
+          python - <<'PY'
+          import json, sys
+          data=json.load(open('/tmp/d1.json'))
+          items=data.get('result', data if isinstance(data,list) else [])
+          found=None
+          for x in items:
+              if x.get('name') == 'wild-east-club':
+                  found=x
+                  break
+          if found:
+              print(found.get('uuid') or found.get('database_id') or found.get('id'))
+          PY
+
+      - name: Create D1 if missing
+        id: create
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -e
+          python - <<'PY'
+          import json, os, subprocess
+          data=json.load(open('/tmp/d1.json'))
+          items=data.get('result', data if isinstance(data,list) else [])
+          found=next((x for x in items if x.get('name') == 'wild-east-club'), None)
+          if found:
+              dbid=found.get('uuid') or found.get('database_id') or found.get('id')
+              print(f'dbid={dbid}')
+              open('/tmp/dbid','w').write(dbid)
+              raise SystemExit(0)
+          PY
+          if [ ! -s /tmp/dbid ]; then
+            wrangler d1 create wild-east-club --location=weur --json > /tmp/create.json
+            python - <<'PY'
+          import json
+          data=json.load(open('/tmp/create.json'))
+          result=data.get('result', data)
+          dbid=result.get('uuid') or result.get('database_id') or result.get('id')
+          if not dbid:
+              raise SystemExit('Could not determine D1 database ID')
+          open('/tmp/dbid','w').write(dbid)
+          print(dbid)
+          PY
+          fi
+          echo "DB_ID=$(cat /tmp/dbid)" >> "$GITHUB_ENV"
+
+      - name: Update Wrangler config
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os, re
+          p=Path('worker/wrangler.toml')
+          s=p.read_text()
+          dbid=os.environ['DB_ID']
+          s=re.sub(r'database_id\s*=\s*"[^"]+"', f'database_id = "{dbid}"', s)
+          p.write_text(s)
+          PY
+
+      - name: Commit D1 binding
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/wrangler.toml
+          if git diff --cached --quiet; then
+            echo "No config changes to commit"
+          else
+            git commit -m "Configure Cloudflare D1 database"
+            git push origin HEAD:feature/mini-app-cloudflare-2026-09-18
+          fi
+
+      - name: Apply D1 schema
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          wrangler d1 execute wild-east-club --remote --file=schema.sql
+
+      - name: Summary
+        run: |
+          echo "D1 database configured successfully."
+          echo "Database ID: $DB_ID"
