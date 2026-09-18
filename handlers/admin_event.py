@@ -129,6 +129,25 @@ async def add_event_meeting_point(message: Message, state: FSMContext):
         parse_mode="HTML",
     )
 
+    events = await db.get_events()
+    keyboard = []
+    for event in events:
+        event_id, route_id, event_date, event_time, price, route_title, start_point, finish_point, meeting_point = event
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"✏️ {event_date[8:10]}-{event_date[5:7]}-{event_date[:4]} {event_time} — {route_title}",
+                callback_data=f"edit_event_{event_id}",
+            )
+        ])
+    keyboard.append([InlineKeyboardButton(text="➕ Добавить мероприятие", callback_data="add_event")])
+    keyboard.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_back")])
+    await message.answer(
+        "📅 <b>Управление мероприятиями</b>\n\n"
+        "Выберите мероприятие для редактирования или создайте новое:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML",
+    )
+
 
 @router.callback_query(F.data == "admin_event_cancel")
 async def add_event_cancel(callback: CallbackQuery, state: FSMContext):
