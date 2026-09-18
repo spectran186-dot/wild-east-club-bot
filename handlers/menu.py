@@ -88,19 +88,7 @@ async def show_events(message: Message):
             parse_mode="HTML",
         )
 
-    await message.answer(
-        "Выберите мероприятие для записи:",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="⬅️ Главное меню",
-                        callback_data="menu_back",
-                    )
-                ]
-            ]
-        ),
-    )
+    return
 
 
 @router.message(F.text == "📅 Мероприятия")
