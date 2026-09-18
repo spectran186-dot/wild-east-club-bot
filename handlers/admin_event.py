@@ -409,4 +409,32 @@ async def delete_event_yes(callback: CallbackQuery, state: FSMContext):
     if event_id:
         await db.delete_event(event_id)
     await state.clear()
-    await callback.message.edit_text("🗑 <b>Мероприятие удалено.</b>", parse_mode="HTML")
+
+    events = await db.get_events()
+    keyboard = []
+
+    for event in events:
+        event_id, route_id, event_date, event_time, price, route_title, start_point, finish_point, meeting_point = event
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"✏️ {event_date[8:10]}-{event_date[5:7]}-{event_date[:4]} {event_time} — {route_title}",
+                callback_data=f"edit_event_{event_id}",
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            text="➕ Добавить мероприятие",
+            callback_data="add_event",
+        )
+    ])
+    keyboard.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_back")
+    ])
+
+    await callback.message.edit_text(
+        "📅 <b>Управление мероприятиями</b>\n\n"
+        "Выберите мероприятие для редактирования или создайте новое:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML",
+    )
