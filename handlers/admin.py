@@ -21,6 +21,7 @@ def admin_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📋 Заявки", callback_data="admin_bookings")],
+            [InlineKeyboardButton(text="➕ Внести заявку", callback_data="admin_manual_booking_menu")],
             [InlineKeyboardButton(text="📊 Отчёты", callback_data="admin_reports")],
             [InlineKeyboardButton(text="📅 Мероприятия", callback_data="admin_events")],
         ]
@@ -272,6 +273,26 @@ async def booking_page(callback: CallbackQuery):
         logger.exception("Failed to load booking page")
         await callback.message.edit_text("⚠️ Не удалось загрузить страницу заявок.", reply_markup=back_keyboard())
 
+@router.callback_query(F.data == "admin_manual_booking_menu")
+async def admin_manual_booking_menu(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    events = await db.get_events()
+    events = [event for event in events if event[9] != "deleted"]
+    if not events:
+        await callback.answer("Нет доступных мероприятий", show_alert=True)
+        return
+
+    buttons = []
+    for event in events:
+        event_id, _route_id, event_date, event_time, _price, route_title, *_rest = event
+        date_display = f"{event_date[8:10]}.{event_date[5:7]}" if event_date else "—"
+        buttons.append([InlineKeyboardButton(text=f"📅 {date_display} | {event_time or '—'}\n🛶 {route_title or 'Маршрут'}", callback_data=f"admin_manual_booking_{event_id}")])
+    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_back")])
+    await callback.answer()
+    await callback.message.edit_text("➕ <b>Внести заявку вручную</b>\n\nВыберите мероприятие:", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
 @router.callback_query(F.data.regexp(r"^admin_manual_booking_\d+$"))
 async def admin_manual_booking_start(callback: CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
