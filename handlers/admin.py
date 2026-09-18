@@ -50,42 +50,15 @@ async def admin_panel(message: Message):
 
 async def booking_card_keyboard(booking):
     booking_id, event_id, telegram_id, full_name, phone, created_at, event_date, event_time, route_title, children, comment, status, max_places = booking
-    buttons = []
 
-    if status in ("cancelled", "canceled"):
-        buttons.append([
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
             InlineKeyboardButton(
-                text="↩️ Вернуть в новые",
-                callback_data=f"booking_status_new_{booking_id}",
+                text="⬅️ Вернуться назад",
+                callback_data="admin_bookings",
             )
-        ])
-    elif status == "confirmed":
-        buttons.append([
-            InlineKeyboardButton(
-                text="↩️ Вернуть в новые",
-                callback_data=f"booking_status_new_{booking_id}",
-            )
-        ])
-    else:
-        buttons.append([
-            InlineKeyboardButton(
-                text="✅ Подтвердить",
-                callback_data=f"booking_status_confirmed_{booking_id}",
-            ),
-            InlineKeyboardButton(
-                text="❌ Отменить",
-                callback_data=f"booking_status_cancelled_{booking_id}",
-            ),
-        ])
-
-    buttons.append([
-        InlineKeyboardButton(
-            text="⬅️ Вернуться назад",
-            callback_data="admin_bookings",
-        )
+        ]
     ])
-
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def booking_status_label(status):
@@ -217,7 +190,6 @@ async def show_event_bookings(callback: CallbackQuery, event_id: int):
 
         await callback.message.answer(
             "\n".join(lines),
-            reply_markup=await booking_card_keyboard(booking),
             parse_mode="HTML",
         )
 
@@ -226,7 +198,7 @@ async def show_event_bookings(callback: CallbackQuery, event_id: int):
         f"📅 {date_display}  🕒 {event_time or '—'}\n\n"
         f"Заявок: <b>{booked_count} / {max_places}</b>",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="⬅️ К мероприятиям", callback_data="admin_bookings")]
+            [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="admin_bookings")]
         ]),
         parse_mode="HTML",
     )
