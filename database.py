@@ -197,6 +197,17 @@ class Database:
         finally:
             await connection.close()
 
+    async def delete_booking(self, booking_id):
+        connection = await self._connect()
+        try:
+            await connection.execute(
+                "DELETE FROM bookings WHERE id = ?",
+                (booking_id,),
+            )
+            await connection.commit()
+        finally:
+            await connection.close()
+
     async def get_event_booking_stats(self, event_id):
         connection = await self._connect()
         try:
