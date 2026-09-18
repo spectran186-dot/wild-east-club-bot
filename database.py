@@ -74,6 +74,17 @@ class Database:
         finally:
             await connection.close()
 
+    async def delete_event(self, event_id):
+        connection = await self._connect()
+        try:
+            await connection.execute(
+                "UPDATE events SET status = 'deleted' WHERE id = ?",
+                (event_id,),
+            )
+            await connection.commit()
+        finally:
+            await connection.close()
+
     async def has_booking(self, event_id, full_name, phone):
         connection = await self._connect()
         try:
