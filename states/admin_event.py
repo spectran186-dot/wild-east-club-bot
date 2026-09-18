@@ -6,3 +6,8 @@ class AdminEventState(StatesGroup):
     waiting_time = State()
     waiting_price = State()
     waiting_meeting_point = State()
+    edit_waiting_route = State()
+    edit_waiting_date = State()
+    edit_waiting_time = State()
+    edit_waiting_price = State()
+    edit_waiting_meeting_point = State()
