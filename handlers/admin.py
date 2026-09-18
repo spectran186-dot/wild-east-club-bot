@@ -558,12 +558,12 @@ async def report_route(callback: CallbackQuery):
     await callback.message.edit_text(
         chunks[0],
         parse_mode="HTML",
-        reply_markup=back_keyboard() if len(chunks) == 1 else None,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Вернуться в выбор отчёта", callback_data="admin_reports")]]) if len(chunks) == 1 else None,
     )
     for chunk in chunks[1:]:
         await callback.message.answer(chunk, parse_mode="HTML")
     if len(chunks) > 1:
-        await callback.message.answer("Навигация:", reply_markup=back_keyboard())
+        await callback.message.answer("Навигация:", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Вернуться в выбор отчёта", callback_data="admin_reports")]]))
 
 
 @router.callback_query(F.data == "admin_events")
