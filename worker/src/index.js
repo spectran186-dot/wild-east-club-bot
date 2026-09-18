@@ -1,6 +1,6 @@
 const json=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"content-type":"application/json","cache-control":"no-store"}});
-function phone(v){let d=String(v||"").replace(/\\D/g,"");if(d.length===11&&d[0]==="8")d="7"+d.slice(1);if(d.length===10)d="7"+d;return /^7\\d{10}$/.test(d)?"+"+d:null}
-async function validInitData(raw,token){if(!raw||!token)return null;const p=new URLSearchParams(raw),hash=p.get("hash");if(!hash)return null;p.delete("hash");const pairs=[...p.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>k+"="+v).join("\\n");const enc=new TextEncoder();const base=await crypto.subtle.importKey("raw",enc.encode("WebAppData"),{name:"HMAC",hash:"SHA-256"},false,["sign"]);const secret=await crypto.subtle.sign("HMAC",base,enc.encode(token));const key=await crypto.subtle.importKey("raw",secret,{name:"HMAC",hash:"SHA-256"},false,["sign"]);const sig=await crypto.subtle.sign("HMAC",key,enc.encode(pairs));const hex=[...new Uint8Array(sig)].map(x=>x.toString(16).padStart(2,"0")).join("");if(hex!==hash)return null;const u=p.get("user");try{return u?JSON.parse(u):null}catch{return null}}
+function phone(v){let d=String(v||"").replace(/\D/g,"");if(d.length===11&&d[0]==="8")d="7"+d.slice(1);if(d.length===10)d="7"+d;return /^7\d{10}$/.test(d)?"+"+d:null}
+async function validInitData(raw,token){if(!raw||!token)return null;const p=new URLSearchParams(raw),hash=p.get("hash");if(!hash)return null;p.delete("hash");const pairs=[...p.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>k+"="+v).join("\n");const enc=new TextEncoder();const base=await crypto.subtle.importKey("raw",enc.encode("WebAppData"),{name:"HMAC",hash:"SHA-256"},false,["sign"]);const secret=await crypto.subtle.sign("HMAC",base,enc.encode(token));const key=await crypto.subtle.importKey("raw",secret,{name:"HMAC",hash:"SHA-256"},false,["sign"]);const sig=await crypto.subtle.sign("HMAC",key,enc.encode(pairs));const hex=[...new Uint8Array(sig)].map(x=>x.toString(16).padStart(2,"0")).join("");if(hex!==hash)return null;const u=p.get("user");try{return u?JSON.parse(u):null}catch{return null}}
 async function ctx(request,env){const raw=request.headers.get("X-Telegram-Init-Data")||"";const user=await validInitData(raw,env.BOT_TOKEN);let admin=false;if(user){admin=String(user.id)===String(env.ADMIN_ID);if(!admin)admin=!!(await env.DB.prepare("SELECT 1 FROM admins WHERE telegram_id=?").bind(user.id).first())}return {user,isAdmin:admin}}
 async function routes(env){return (await env.DB.prepare("SELECT id,title,start_point,finish_point,default_price FROM routes WHERE status='active' ORDER BY id").all()).results||[]}
 async function events(env,all=false){const q=all?"SELECT e.*,r.title route_title,r.start_point,r.finish_point FROM events e LEFT JOIN routes r ON r.id=e.route_id WHERE e.status='active' ORDER BY e.event_date,e.event_time":"SELECT e.*,r.title route_title,r.start_point,r.finish_point,MAX(0,e.max_places-(SELECT COUNT(*) FROM bookings b WHERE b.event_id=e.id AND b.status NOT IN ('cancelled','canceled'))) free_places FROM events e LEFT JOIN routes r ON r.id=e.route_id WHERE e.status='active' GROUP BY e.id ORDER BY e.event_date,e.event_time";return (await env.DB.prepare(q).all()).results||[]}
@@ -26,13 +26,13 @@ async function handleTelegramWebhook(request,env){
   if(!message?.chat?.id)return json({ok:true});
   const chatId=message.chat.id;
   const text=String(message.text||"");
-  if(/^\/start(?:@\\w+)?(?:\\s|$)/i.test(text)){
+  if(/^\/start(?:@\w+)?(?:\s|$)/i.test(text)){
     const appUrl=String(env.MINIAPP_URL||new URL(request.url).origin);
     await telegramSend(env,chatId,
-      "🌊 Добро пожаловать в Wild East Club!\\n\\nСтирая границы, создавая моменты.\\n\\nОткройте приложение 👇",
+      "🌊 Добро пожаловать в Wild East Club!\n\nСтирая границы, создавая моменты.\n\nОткройте приложение 👇",
       {inline_keyboard:[[{text:"🚀 Открыть Wild East Club",web_app:{url:appUrl}}]]}
     );
-  }else if(/^\/admin(?:@\\w+)?(?:\\s|$)/i.test(text)){
+  }else if(/^\/admin(?:@\w+)?(?:\s|$)/i.test(text)){
     const userId=message.from?.id;
     const isAdmin=String(userId)===String(env.ADMIN_ID)||(userId&&!!(await env.DB.prepare("SELECT 1 FROM admins WHERE telegram_id=?").bind(userId).first()));
     if(isAdmin){
