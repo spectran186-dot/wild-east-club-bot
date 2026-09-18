@@ -12,7 +12,6 @@ permissions:
 jobs:
   provision:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,8 +27,7 @@ jobs:
       - name: Install Wrangler
         run: npm install --global wrangler@latest
 
-      - name: Check existing D1
-        id: check
+      - name: Check or create D1
         working-directory: worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -37,41 +35,36 @@ jobs:
         run: |
           set -e
           wrangler d1 list --json > /tmp/d1.json
-
-      - name: Create D1 if missing
-        id: create
-        working-directory: worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -e
           python - <<'PY'
           import json
           data=json.load(open('/tmp/d1.json'))
-          items=data.get('result', data if isinstance(data,list) else [])
-          found=next((x for x in items if x.get('name') == 'wild-east-club'), None)
+          items = data if isinstance(data, list) else data.get("result", [])
+          found=next((x for x in items if x.get("name")=="wild-east-club"), None)
           if found:
-              dbid=found.get('uuid') or found.get('database_id') or found.get('id')
-              open('/tmp/dbid','w').write(dbid)
-              print(f'Using existing D1: {dbid}')
+              dbid=found.get("uuid") or found.get("database_id") or found.get("id")
+              if not dbid:
+                  raise SystemExit("Existing D1 found but no database ID was returned")
+              print(f"Using existing D1: {dbid}")
+              open("/tmp/dbid","w").write(dbid)
           else:
-              open('/tmp/dbid','w').write('')
+              print("D1 wild-east-club not found; creating it")
+              open("/tmp/dbid","w").write("")
           PY
 
           if [ ! -s /tmp/dbid ]; then
             wrangler d1 create wild-east-club --location=weur --json > /tmp/create.json
             python - <<'PY'
           import json
-          data=json.load(open('/tmp/create.json'))
-          result=data.get('result', data)
-          dbid=result.get('uuid') or result.get('database_id') or result.get('id')
+          data=json.load(open("/tmp/create.json"))
+          result=data.get("result", data) if isinstance(data, dict) else data
+          dbid=result.get("uuid") or result.get("database_id") or result.get("id")
           if not dbid:
-              raise SystemExit('Could not determine D1 database ID')
-          open('/tmp/dbid','w').write(dbid)
-          print(f'Created D1: {dbid}')
+              raise SystemExit("Could not determine newly created D1 database ID")
+          print(f"Created D1: {dbid}")
+          open("/tmp/dbid","w").write(dbid)
           PY
           fi
+
           echo "DB_ID=$(cat /tmp/dbid)" >> "$GITHUB_ENV"
 
       - name: Update Wrangler config
@@ -79,9 +72,9 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import os, re
-          p=Path('worker/wrangler.toml')
+          p=Path("worker/wrangler.toml")
           s=p.read_text()
-          dbid=os.environ['DB_ID']
+          dbid=os.environ["DB_ID"]
           s=re.sub(r'database_id\s*=\s*"[^"]+"', f'database_id = "{dbid}"', s)
           p.write_text(s)
           PY
