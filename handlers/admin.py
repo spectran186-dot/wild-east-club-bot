@@ -280,7 +280,6 @@ async def admin_manual_booking_menu(callback: CallbackQuery):
         return
 
     events = await db.get_events()
-    events = [event for event in events if event[9] != "deleted"]
     if not events:
         await callback.answer("Нет доступных мероприятий", show_alert=True)
         return
