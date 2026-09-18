@@ -320,12 +320,16 @@ async def booking_status(callback: CallbackQuery):
     status = parts[2]
     booking_id = int(parts[3])
 
-    await db.update_booking_status(booking_id, status)
-    await callback.answer(
-        "Заявка подтверждена" if status == "confirmed"
-        else "Заявка отменена" if status == "cancelled"
-        else "Заявка снова активна"
-    )
+    if status == "cancelled":
+        await db.delete_booking(booking_id)
+        await callback.answer("Заявка удалена")
+    else:
+        await db.update_booking_status(booking_id, status)
+        await callback.answer(
+            "Заявка подтверждена" if status == "confirmed"
+            else "Заявка снова активна"
+        )
+
     await show_bookings(callback)
 
 
