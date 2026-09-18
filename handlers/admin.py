@@ -51,14 +51,21 @@ async def admin_panel(message: Message):
 async def booking_card_keyboard(booking):
     booking_id, event_id, telegram_id, full_name, phone, created_at, event_date, event_time, route_title, children, comment, status, max_places = booking
 
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="⬅️ Вернуться назад",
-                callback_data="admin_bookings",
-            )
-        ]
-    ])
+    if status == "new":
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Подтвердить",
+                    callback_data=f"booking_status_confirmed_{booking_id}",
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отменить",
+                    callback_data=f"booking_status_cancelled_{booking_id}",
+                ),
+            ]
+        ])
+
+    return InlineKeyboardMarkup(inline_keyboard=[])
 
 
 def booking_status_label(status):
