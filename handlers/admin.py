@@ -80,8 +80,7 @@ async def show_bookings(callback: CallbackQuery):
                 lines.append("👶 Ребенок с вами на SUP: +500 ₽")
             if comment:
                 lines.append(f"💬 Комментарий: {comment}")
-            lines.append("──────────────",
-            ])
+            lines.append("──────────────")
         text = "\n".join(lines)
 
     await callback.message.edit_text(
