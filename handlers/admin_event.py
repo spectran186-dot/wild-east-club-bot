@@ -60,7 +60,12 @@ async def add_event_route(callback: CallbackQuery, state: FSMContext):
     if not route:
         await callback.message.edit_text("⚠️ Маршрут не найден.")
         return
-    await state.update_data(route_id=route_id, route_title=route[1], default_price=route[4])
+    await state.update_data(
+        route_id=route_id,
+        route_title=route[1],
+        default_price=route[4],
+        default_meeting=route[2],
+    )
     await state.set_state(AdminEventState.waiting_date)
     await callback.message.edit_text(
         f"➕ <b>Добавление мероприятия</b>\n\n"
@@ -117,7 +122,7 @@ async def add_event_default_price(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         "Шаг 5 из 5 — введите точку встречи:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📍 По умолчанию", callback_data="add_event_default_meeting")],
+            [InlineKeyboardButton(text=f"📍 По умолчанию: {data.get('default_meeting')}", callback_data="add_event_default_meeting")],
             [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_event_cancel")],
         ]),
     )
