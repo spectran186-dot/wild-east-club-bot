@@ -1,9 +1,9 @@
 name: Deploy Wild East Club Mini App
 
 on:
-  push:
-    branches:
-      - feature/mini-app-cloudflare-2026-09-18
+  workflow_run:
+    workflows: ["Provision Wild East Club D1"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'feature/mini-app-cloudflare-2026-09-18') }}
     runs-on: ubuntu-latest
 
     defaults:
@@ -18,8 +19,10 @@ jobs:
         working-directory: worker
 
     steps:
-      - name: Checkout
+      - name: Checkout Mini App branch
         uses: actions/checkout@v4
+        with:
+          ref: feature/mini-app-cloudflare-2026-09-18
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,6 +34,13 @@ jobs:
 
       - name: Verify Wrangler
         run: wrangler --version
+
+      - name: Validate D1 binding
+        run: |
+          if grep -q 'REPLACE_WITH_D1_DATABASE_ID' wrangler.toml; then
+            echo "D1 database_id is still a placeholder."
+            exit 1
+          fi
 
       - name: Deploy Worker
         env:
