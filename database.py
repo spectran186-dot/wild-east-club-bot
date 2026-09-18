@@ -114,7 +114,7 @@ class Database:
         finally:
             await connection.close()
 
-    async def add_booking(self, telegram_id, event_id, full_name, phone, children=0, comment=""):
+    async def add_booking(self, telegram_id, event_id, full_name, phone, children=0, comment="", status="new"):
         def normalize_phone(value):
             digits = "".join(ch for ch in str(value or "") if ch.isdigit())
             if digits.startswith("8") and len(digits) == 11:
@@ -130,8 +130,8 @@ class Database:
         connection = await self._connect()
         try:
             await connection.execute(
-                "INSERT INTO bookings (telegram_id, event_id, full_name, phone, children, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (telegram_id, event_id, full_name, phone, children, comment, datetime.now().strftime("%Y-%m-%d %H:%M")),
+                "INSERT INTO bookings (telegram_id, event_id, full_name, phone, children, comment, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (telegram_id, event_id, full_name, phone, children, comment, status, datetime.now().strftime("%Y-%m-%d %H:%M")),
             )
             await connection.commit()
         finally:
