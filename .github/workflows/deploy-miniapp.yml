@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'feature/mini-app-cloudflare-2026-09-18') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'feature/mini-app-cloudflare-2026-09-18') }}
     runs-on: ubuntu-latest
 
     defaults:
