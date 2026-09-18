@@ -48,44 +48,103 @@ async def admin_panel(message: Message):
     )
 
 
+async def booking_card_keyboard(booking):
+    booking_id, event_id, telegram_id, full_name, phone, created_at, event_date, event_time, route_title, children, comment, status, max_places = booking
+    buttons = []
+
+    if status == "confirmed":
+        buttons.append([InlineKeyboardButton(text="↩️ Вернуть в новые", callback_data=f"booking_status_new_{booking_id}")])
+    elif status in ("cancelled", "canceled"):
+        buttons.append([InlineKeyboardButton(text="↩️ Вернуть в новые", callback_data=f"booking_status_new_{booking_id}")])
+    else:
+        buttons.append([
+            InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"booking_status_confirmed_{booking_id}"),
+            InlineKeyboardButton(text="❌ Отменить", callback_data=f"booking_status_cancelled_{booking_id}"),
+        ])
+
+    phone_digits = "".join(ch for ch in phone if ch.isdigit())
+    buttons.append([
+        InlineKeyboardButton(text="📞 Позвонить", url=f"tel:+{phone_digits}"),
+        InlineKeyboardButton(text="💬 Написать", url=f"tg://user?id={telegram_id}"),
+    ])
+    buttons.append([InlineKeyboardButton(text="⬅️ К списку заявок", callback_data="admin_bookings")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def booking_status_label(status):
+    return {
+        "new": "🆕 Новая",
+        "confirmed": "✅ Подтверждена",
+        "cancelled": "❌ Отменена",
+        "canceled": "❌ Отменена",
+    }.get(status, status)
+
+
+def format_booking_card(booking, booked_count, max_places):
+    (
+        booking_id, event_id, telegram_id, full_name, phone, created_at,
+        event_date, event_time, route_title, children, comment, status, _max_places,
+    ) = booking
+
+    date_display = (
+        f"{event_date[8:10]}.{event_date[5:7]}.{event_date[:4]}"
+        if event_date else "—"
+    )
+
+    lines = [
+        f"👤 <b>{full_name}</b>",
+        "",
+        f"📞 {phone}",
+        f"🛶 {route_title or 'Маршрут не указан'}",
+        f"📅 {date_display}",
+        f"🕒 {event_time or '—'}",
+        f"👶 Ребёнок: {'да' if children else 'нет'}",
+    ]
+
+    if comment:
+        lines.append(f"💬 Комментарий: {comment}")
+
+    lines.extend([
+        "",
+        f"{booking_status_label(status)}",
+        "",
+        f"<b>Заявки: {booked_count} / {max_places}</b>",
+    ])
+    return "\n".join(lines)
+
+
 async def show_bookings(callback: CallbackQuery):
     bookings = await db.get_bookings()
 
     if not bookings:
-        text = "📋 <b>Заявки</b>\n\nЗаявок пока нет."
-    else:
-        lines = ["📋 <b>Заявки</b>", ""]
-        for booking in bookings:
-            (
-                booking_id,
-                full_name,
-                phone,
-                created_at,
-                event_date,
-                event_time,
-                route_title,
-                children,
-                comment,
-            ) = booking
+        await callback.message.edit_text(
+            "📋 <b>Заявки</b>\n\nЗаявок пока нет.",
+            reply_markup=back_keyboard(),
+            parse_mode="HTML",
+        )
+        return
 
-            lines.extend([
-                f"🆔 Заявка №{booking_id}",
-                f"👤 {full_name}",
-                f"📞 +{phone}",
-                f"📅 {event_date}  {event_time}",
-                f"🛶 {route_title}",
-                f"🕐 Создана: {created_at}",
-            ])
-            if children:
-                lines.append("👶 Ребенок с вами на SUP: +500 ₽")
-            if comment:
-                lines.append(f"💬 Комментарий: {comment}")
-            lines.append("──────────────")
-        text = "\n".join(lines)
-
+    booking = bookings[0]
+    booked_count, max_places = await db.get_event_booking_stats(booking[1])
     await callback.message.edit_text(
-        text,
-        reply_markup=back_keyboard(),
+        format_booking_card(booking, booked_count, max_places),
+        reply_markup=await booking_card_keyboard(booking),
+        parse_mode="HTML",
+    )
+
+
+async def show_booking_by_id(callback: CallbackQuery, booking_id: int):
+    bookings = await db.get_bookings()
+    booking = next((item for item in bookings if item[0] == booking_id), None)
+
+    if not booking:
+        await callback.answer("⚠️ Заявка не найдена", show_alert=True)
+        return
+
+    booked_count, max_places = await db.get_event_booking_stats(booking[1])
+    await callback.message.edit_text(
+        format_booking_card(booking, booked_count, max_places),
+        reply_markup=await booking_card_keyboard(booking),
         parse_mode="HTML",
     )
 
@@ -149,6 +208,25 @@ async def admin_bookings(callback: CallbackQuery):
             "⚠️ Не удалось загрузить заявки. Ошибка записана в лог.",
             reply_markup=back_keyboard(),
         )
+
+
+@router.callback_query(F.data.regexp(r"^booking_status_(new|confirmed|cancelled)_\\d+$"))
+async def booking_status(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    parts = callback.data.split("_")
+    status = parts[2]
+    booking_id = int(parts[3])
+
+    await db.update_booking_status(booking_id, status)
+    await callback.answer(
+        "Заявка подтверждена" if status == "confirmed"
+        else "Заявка отменена" if status == "cancelled"
+        else "Заявка снова активна"
+    )
+    await show_booking_by_id(callback, booking_id)
 
 
 @router.callback_query(F.data == "admin_events")
