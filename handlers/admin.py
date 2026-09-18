@@ -367,7 +367,7 @@ async def admin_reports(callback: CallbackQuery):
             revenue += price + int(booking[9] or 0) * 500
         keyboard.append([
             InlineKeyboardButton(
-                text=f"🛶 {route_title}\n👥 {people} чел. · 🏄 {boards} досок · 💰 {revenue:,} ₽".replace(",", " "),
+                text=f"📊 {route_bookings[0][6][8:10]}.{route_bookings[0][6][5:7]} | {route_bookings[0][7] or '—'}\\n🛶 {route_title}\\n👥 {people} · 🏄 {boards} · 💰 {revenue:,} ₽".replace(",", " "),
                 callback_data=f"report_route_{route_bookings[0][1]}",
             )
         ])
