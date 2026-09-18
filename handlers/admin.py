@@ -303,7 +303,7 @@ async def admin_bookings(callback: CallbackQuery):
         )
 
 
-@router.callback_query(F.data.regexp(r"^booking_status_(new|confirmed|cancelled)_\d+$"))
+@router.callback_query(F.data.regexp(r"^booking_status_(confirmed|cancelled)_\\d+$"))
 async def booking_status(callback: CallbackQuery):
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Нет доступа", show_alert=True)
@@ -316,14 +316,22 @@ async def booking_status(callback: CallbackQuery):
     if status == "cancelled":
         await db.delete_booking(booking_id)
         await callback.answer("Заявка удалена")
+        # После удаления карточка больше не нужна.
+        try:
+            await callback.message.delete()
+        except Exception:
+            logger.exception("Failed to delete cancelled booking card")
     else:
         await db.update_booking_status(booking_id, status)
-        await callback.answer(
-            "Заявка подтверждена" if status == "confirmed"
-            else "Заявка снова активна"
-        )
+        await callback.answer("Заявка подтверждена")
 
-    await show_bookings(callback)
+        # Карточка остаётся на экране, но кнопки подтверждения/отмены убираются.
+        try:
+            await callback.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[])
+            )
+        except Exception:
+            logger.exception("Failed to update confirmed booking card")
 
 
 @router.callback_query(F.data == "admin_events")
