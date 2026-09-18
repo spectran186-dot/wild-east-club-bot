@@ -5,7 +5,48 @@ async function ctx(request,env){const raw=request.headers.get("X-Telegram-Init-D
 async function routes(env){return (await env.DB.prepare("SELECT id,title,start_point,finish_point,default_price FROM routes WHERE status='active' ORDER BY id").all()).results||[]}
 async function events(env,all=false){const q=all?"SELECT e.*,r.title route_title,r.start_point,r.finish_point FROM events e LEFT JOIN routes r ON r.id=e.route_id WHERE e.status='active' ORDER BY e.event_date,e.event_time":"SELECT e.*,r.title route_title,r.start_point,r.finish_point,MAX(0,e.max_places-(SELECT COUNT(*) FROM bookings b WHERE b.event_id=e.id AND b.status NOT IN ('cancelled','canceled'))) free_places FROM events e LEFT JOIN routes r ON r.id=e.route_id WHERE e.status='active' GROUP BY e.id ORDER BY e.event_date,e.event_time";return (await env.DB.prepare(q).all()).results||[]}
 async function notify(env,text){if(!env.BOT_TOKEN||!env.ADMIN_ID)return;await fetch("https://api.telegram.org/bot"+env.BOT_TOKEN+"/sendMessage",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:Number(env.ADMIN_ID),text})}).catch(()=>{})}
-async function handle(request,env){const u=new URL(request.url),p=u.pathname,m=request.method,c=await ctx(request,env);
+async function telegramSend(env,chatId,text,replyMarkup=null){
+  if(!env.BOT_TOKEN)return;
+  const body={chat_id:Number(chatId),text};
+  if(replyMarkup)body.reply_markup=replyMarkup;
+  await fetch("https://api.telegram.org/bot"+env.BOT_TOKEN+"/sendMessage",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}).catch(()=>{});
+}
+async function webhookSecret(env){
+  if(!env.BOT_TOKEN)return "";
+  const enc=new TextEncoder();
+  const key=await crypto.subtle.importKey("raw",enc.encode("webhook-secret"),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  const sig=await crypto.subtle.sign("HMAC",key,enc.encode(env.BOT_TOKEN));
+  return [...new Uint8Array(sig)].map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+async function handleTelegramWebhook(request,env){
+  const expected=await webhookSecret(env);
+  if(!expected||request.headers.get("X-Telegram-Bot-Api-Secret-Token")!==expected)return json({error:"Unauthorized"},401);
+  const update=await request.json().catch(()=>null);
+  const message=update?.message;
+  if(!message?.chat?.id)return json({ok:true});
+  const chatId=message.chat.id;
+  const text=String(message.text||"");
+  if(/^\/start(?:@\\w+)?(?:\\s|$)/i.test(text)){
+    const appUrl=String(env.MINIAPP_URL||new URL(request.url).origin);
+    await telegramSend(env,chatId,
+      "🌊 Добро пожаловать в Wild East Club!\\n\\nСтирая границы, создавая моменты.\\n\\nОткройте приложение 👇",
+      {inline_keyboard:[[{text:"🚀 Открыть Wild East Club",web_app:{url:appUrl}}]]}
+    );
+  }else if(/^\/admin(?:@\\w+)?(?:\\s|$)/i.test(text)){
+    const userId=message.from?.id;
+    const isAdmin=String(userId)===String(env.ADMIN_ID)||(userId&&!!(await env.DB.prepare("SELECT 1 FROM admins WHERE telegram_id=?").bind(userId).first()));
+    if(isAdmin){
+      const appUrl=String(env.MINIAPP_URL||new URL(request.url).origin);
+      await telegramSend(env,chatId,"👨‍💼 Административная панель",{
+        inline_keyboard:[[{text:"Открыть админ-панель",web_app:{url:appUrl}}]]
+      });
+    }else{
+      await telegramSend(env,chatId,"⛔ Нет доступа.");
+    }
+  }
+  return json({ok:true});
+}
+async function handle(request,env){const u=new URL(request.url),p=u.pathname,m=request.method;if(p==="/telegram/webhook"&&m==="POST")return handleTelegramWebhook(request,env);const c=await ctx(request,env);
 if(p==="/api/events"&&m==="GET")return json({events:await events(env),routes:await routes(env),isAdmin:c.isAdmin});
 if(p==="/api/bookings"&&m==="POST"){if(!c.user)return json({error:"Откройте приложение из Telegram"},401);const b=await request.json(),e=await env.DB.prepare("SELECT e.*,r.title route_title FROM events e LEFT JOIN routes r ON r.id=e.route_id WHERE e.id=? AND e.status='active'").bind(b.event_id).first();if(!e)return json({error:"Мероприятие недоступно"},404);const ps=Array.isArray(b.participants)?b.participants:[];if(!ps.length)return json({error:"Добавьте участника"},400);for(const x of ps){const ph=phone(x.phone);if(!String(x.full_name||"").trim()||!ph)return json({error:"Проверьте имя и телефон"},400);const d=await env.DB.prepare("SELECT 1 FROM bookings WHERE event_id=? AND lower(trim(full_name))=lower(trim(?)) AND phone=? AND status NOT IN ('cancelled','canceled')").bind(e.id,x.full_name,ph).first();if(d)return json({error:"Такая заявка уже существует"},409)}const occupied=Number((await env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE event_id=? AND status NOT IN ('cancelled','canceled')").bind(e.id).first())?.n||0);if(occupied+ps.length>Number(e.max_places||30))return json({error:"Недостаточно свободных мест"},409);const total=ps.reduce((s,x)=>s+Number(e.price||0)+(x.children?500:0),0);for(const x of ps){await env.DB.prepare("INSERT INTO bookings(event_id,telegram_id,full_name,phone,children,comment,status,source) VALUES(?,?,?,?,?,?,?,?)").bind(e.id,c.user.id,x.full_name,phone(x.phone),x.children?1:0,x.comment||"","new","miniapp").run()}await notify(env,"🔔 НОВЫЕ ЗАЯВКИ!\n🛶 "+(e.route_title||"Маршрут")+"\n📅 "+e.event_date+" "+e.event_time+"\nУчастников: "+ps.length+"\n💰 Итого: "+total+" ₽");return json({ok:true,count:ps.length,total})}
 if(p==="/api/admin/bookings/manual"&&m==="POST"){if(!c.isAdmin)return json({error:"Нет доступа"},403);const b=await request.json(),ph=phone(b.phone);if(!String(b.full_name||"").trim()||!ph)return json({error:"Проверьте имя и телефон"},400);const e=await env.DB.prepare("SELECT e.*,r.title route_title FROM events e LEFT JOIN routes r ON r.id=e.route_id WHERE e.id=? AND e.status='active'").bind(b.event_id).first();if(!e)return json({error:"Мероприятие не найдено"},404);const dup=await env.DB.prepare("SELECT 1 FROM bookings WHERE event_id=? AND lower(trim(full_name))=lower(trim(?)) AND phone=? AND status NOT IN ('cancelled','canceled')").bind(e.id,b.full_name,ph).first();if(dup)return json({error:"Такая заявка уже существует"},409);const occupied=Number((await env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE event_id=? AND status NOT IN ('cancelled','canceled')").bind(e.id).first())?.n||0);if(occupied>=Number(e.max_places||30))return json({error:"Свободных мест нет"},409);await env.DB.prepare("INSERT INTO bookings(event_id,telegram_id,full_name,phone,children,comment,status,source) VALUES(?,?,?,?,?,?,?,?)").bind(e.id,c.user.id,b.full_name,ph,b.children?1:0,"","confirmed","manual").run();return json({ok:true,full_name:b.full_name,phone:ph,children:b.children?1:0})}
