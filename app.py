@@ -7,6 +7,7 @@ from aiogram.types import BotCommand
 import config
 import database
 from handlers import admin
+from handlers import admin_event
 from handlers.admin_event import router as admin_event_router
 from handlers.start import router as start_router
 from handlers.menu import router as menu_router
