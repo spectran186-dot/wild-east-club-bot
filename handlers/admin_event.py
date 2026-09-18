@@ -67,13 +67,81 @@ async def add_event_route(callback: CallbackQuery, state: FSMContext):
         default_meeting=route[2],
     )
     await state.set_state(AdminEventState.waiting_date)
+    default_meeting = route[2] or "не задана"
+    default_price = route[4] if route[4] is not None else "не задана"
     await callback.message.edit_text(
         f"➕ <b>Добавление мероприятия</b>\n\n"
-        f"Маршрут: <b>{route[1]}</b>\n\n"
-        "Шаг 2 из 5 — введите дату в формате <code>ДД.ММ.ГГГГ</code>:",
-        reply_markup=cancel_keyboard(), parse_mode="HTML",
+        f"🛶 Маршрут: <b>{route[1]}</b>\n"
+        f"💰 Цена по умолчанию: <b>{default_price} ₽</b>\n"
+        f"📍 Точка встречи по умолчанию: <b>{default_meeting}</b>\n\n"
+        "Шаг 2 из 5 — введите дату в формате <code>ДД.ММ.ГГГГ</code>:\n\n"
+        "⚡ Можно также создать мероприятие по шаблону.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⚡ Создать по шаблону", callback_data="add_event_template")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_event_cancel")],
+        ]),
+        parse_mode="HTML",
     )
 
+
+def time_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🕒 10:00–13:00", callback_data="add_event_time_10_00_13_00")],
+        [InlineKeyboardButton(text="🕒 13:30–17:00", callback_data="add_event_time_13_30_17_00")],
+        [InlineKeyboardButton(text="🕒 19:00–21:00", callback_data="add_event_time_19_00_21_00")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_event_cancel")],
+    ])
+
+
+async def show_price_step(message, state):
+    data = await state.get_data()
+    await state.set_state(AdminEventState.waiting_price)
+    await message.edit_text(
+        f"Шаг 4 из 5 — цена: <b>{data['default_price']} ₽</b> по умолчанию.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"💰 По умолчанию: {data['default_price']} ₽", callback_data="add_event_default_price")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_event_cancel")],
+        ]),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "add_event_template")
+async def add_event_template(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+    data = await state.get_data()
+    await state.update_data(template_mode=True)
+    await callback.message.edit_text(
+        f"⚡ <b>Создание по шаблону</b>\n\n"
+        f"🛶 {data['route_title']}\n"
+        f"💰 {data['default_price']} ₽\n"
+        f"📍 {data.get('default_meeting') or 'не задана'}\n\n"
+        "Введите дату мероприятия:",
+        reply_markup=cancel_keyboard(),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data.startswith("add_event_time_"))
+async def add_event_time_preset(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    value = callback.data.replace("add_event_time_", "").replace("_", ":")
+    value = value.replace(":", ":", 1)
+    # callback values are encoded as 10_00_13_00 -> 10:00-13:00
+    parts = callback.data.replace("add_event_time_", "").split("_")
+    value = f"{parts[0]}:{parts[1]}-{parts[2]}:{parts[3]}"
+    await callback.answer()
+    await state.update_data(event_time=value)
+    await show_price_step(callback.message, state)
+
+
+@router.callback_query(F.data == "add_event_default_price")
+async def add_event_default_price(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AdminEventState.waiting_date)
 async def add_event_date(message: Message, state: FSMContext):
@@ -84,7 +152,11 @@ async def add_event_date(message: Message, state: FSMContext):
         return
     await state.update_data(event_date=date_value.isoformat())
     await state.set_state(AdminEventState.waiting_time)
-    await message.answer("Шаг 3 из 5 — введите время мероприятия, например <code>10:00-13:00</code>:", reply_markup=cancel_keyboard(), parse_mode="HTML")
+    await message.answer(
+        "Шаг 3 из 5 — выберите время мероприятия или введите его вручную:",
+        reply_markup=time_keyboard(),
+        parse_mode="HTML",
+    )
 
 
 @router.message(AdminEventState.waiting_time)
@@ -94,16 +166,7 @@ async def add_event_time(message: Message, state: FSMContext):
         await message.answer("⚠️ Введите корректное время, например 10:00-13:00.", reply_markup=cancel_keyboard())
         return
     await state.update_data(event_time=value)
-    await state.set_state(AdminEventState.waiting_price)
-    data = await state.get_data()
-    await message.answer(
-        f"Шаг 4 из 5 — введите цену в рублях. По умолчанию для маршрута: <b>{data['default_price']} ₽</b>.",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💰 По умолчанию", callback_data="add_event_default_price")],
-            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_event_cancel")],
-        ]),
-        parse_mode="HTML",
-    )
+    await show_price_step(message, state)
 
 
 @router.callback_query(F.data == "add_event_default_price")
