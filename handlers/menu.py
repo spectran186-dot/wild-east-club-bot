@@ -61,32 +61,45 @@ async def show_events(message: Message):
         )
         return
 
-    lines = ["📅 <b>Мероприятия</b>", ""]
-    keyboard = []
+    # Заголовок выводим отдельным сообщением.
+    await message.answer(
+        "📅 <b>Мероприятия</b>",
+        parse_mode="HTML",
+    )
 
+    # Каждое мероприятие — отдельным сообщением.
+    # Поэтому кнопка «Записаться» находится непосредственно под своим мероприятием.
     for event in events_list:
         event_id, route_id, event_date, event_time, price, route_title, start_point, finish_point, meeting_point = event
         cache_event(event)
 
-        lines.extend([
-            "🌊 <b>САП-сплав</b>",
-            f"🛶 {route_title}",
-            f"📅 {event_date[8:10]}.{event_date[5:7]}.{event_date[:4]}",
-            f"🕒 {event_time}",
-            f"📍 {meeting_point or start_point}",
-            f"💰 {price} ₽",
-            "",
-        ])
-        keyboard.append(booking_keyboard(event_id).inline_keyboard[0])
+        event_text = (
+            "🌊 <b>САП-сплав</b>\n"
+            f"🛶 <b>{route_title}</b>\n"
+            f"📅 {event_date[8:10]}.{event_date[5:7]}.{event_date[:4]}\n"
+            f"🕒 {event_time}\n"
+            f"📍 {meeting_point or start_point}\n"
+            f"💰 {price} ₽"
+        )
 
-    keyboard.append([
-        InlineKeyboardButton(text="⬅️ Главное меню", callback_data="menu_back")
-    ])
+        await message.answer(
+            event_text,
+            reply_markup=booking_keyboard(event_id),
+            parse_mode="HTML",
+        )
 
     await message.answer(
-        "\n".join(lines),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode="HTML",
+        "Выберите мероприятие для записи:",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="⬅️ Главное меню",
+                        callback_data="menu_back",
+                    )
+                ]
+            ]
+        ),
     )
 
 
