@@ -87,6 +87,31 @@ jobs:
           echo "### ✅ Telegram webhook configured" >> "$GITHUB_STEP_SUMMARY"
           echo "**Webhook:** $WORKER_URL/telegram/webhook" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Verify Telegram webhook
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          WORKER_URL: ${{ env.WORKER_URL }}
+        run: |
+          INFO=$(curl -sS "https://api.telegram.org/bot$BOT_TOKEN/getWebhookInfo")
+          echo "$INFO"
+          echo "$INFO" | grep -q '"ok":true' || exit 1
+          WEBHOOK_URL=$(printf '%s' "$INFO" | sed -n 's/.*"url":"\([^"]*\)".*/\1/p')
+          PENDING=$(printf '%s' "$INFO" | sed -n 's/.*"pending_update_count":\([0-9]*\).*/\1/p')
+          LAST_ERROR=$(printf '%s' "$INFO" | sed -n 's/.*"last_error_message":"\([^"]*\)".*/\1/p')
+          echo "Webhook URL: $WEBHOOK_URL"
+          echo "Pending updates: $PENDING"
+          if [ -n "$LAST_ERROR" ]; then echo "Last Telegram error: $LAST_ERROR"; else echo "Last Telegram error: none"; fi
+          EXPECTED="$WORKER_URL/telegram/webhook"
+          if [ "$WEBHOOK_URL" != "$EXPECTED" ]; then
+            echo "Webhook URL mismatch."
+            echo "Expected: $EXPECTED"
+            exit 1
+          fi
+          echo "### 🔎 Telegram webhook verified" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Webhook URL:** $WEBHOOK_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Pending updates:** $PENDING" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$LAST_ERROR" ]; then echo "**Last Telegram error:** $LAST_ERROR" >> "$GITHUB_STEP_SUMMARY"; else echo "**Last Telegram error:** none" >> "$GITHUB_STEP_SUMMARY"; fi
+
       - name: Verify live API
         env:
           WORKER_URL: ${{ env.WORKER_URL }}
@@ -102,3 +127,4 @@ jobs:
           echo "### ✅ Live API check passed" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**GET /api/events:** HTTP $HTTP_CODE" >> "$GITHUB_STEP_SUMMARY"
+          
