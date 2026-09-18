@@ -149,7 +149,7 @@ def edit_route_keyboard(routes):
     )
 
 
-@router.callback_query(F.data.regexp(r"^edit_event_\\d+$"))
+@router.callback_query(F.data.regexp(r"^edit_event_\d+$"))
 async def edit_event_start(callback: CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Нет доступа", show_alert=True)
