@@ -1,6 +1,9 @@
 name: Provision Wild East Club D1
 
 on:
+  push:
+    branches:
+      - feature/mini-app-cloudflare-2026-09-18
   workflow_dispatch:
 
 permissions:
@@ -34,18 +37,6 @@ jobs:
         run: |
           set -e
           wrangler d1 list --json > /tmp/d1.json
-          python - <<'PY'
-          import json, sys
-          data=json.load(open('/tmp/d1.json'))
-          items=data.get('result', data if isinstance(data,list) else [])
-          found=None
-          for x in items:
-              if x.get('name') == 'wild-east-club':
-                  found=x
-                  break
-          if found:
-              print(found.get('uuid') or found.get('database_id') or found.get('id'))
-          PY
 
       - name: Create D1 if missing
         id: create
@@ -56,16 +47,18 @@ jobs:
         run: |
           set -e
           python - <<'PY'
-          import json, os, subprocess
+          import json
           data=json.load(open('/tmp/d1.json'))
           items=data.get('result', data if isinstance(data,list) else [])
           found=next((x for x in items if x.get('name') == 'wild-east-club'), None)
           if found:
               dbid=found.get('uuid') or found.get('database_id') or found.get('id')
-              print(f'dbid={dbid}')
               open('/tmp/dbid','w').write(dbid)
-              raise SystemExit(0)
+              print(f'Using existing D1: {dbid}')
+          else:
+              open('/tmp/dbid','w').write('')
           PY
+
           if [ ! -s /tmp/dbid ]; then
             wrangler d1 create wild-east-club --location=weur --json > /tmp/create.json
             python - <<'PY'
@@ -76,7 +69,7 @@ jobs:
           if not dbid:
               raise SystemExit('Could not determine D1 database ID')
           open('/tmp/dbid','w').write(dbid)
-          print(dbid)
+          print(f'Created D1: {dbid}')
           PY
           fi
           echo "DB_ID=$(cat /tmp/dbid)" >> "$GITHUB_ENV"
