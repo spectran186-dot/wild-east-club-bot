@@ -50,3 +50,28 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: wrangler deploy
+
+      - name: Show Worker URL
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          URL=$(wrangler deployments list --json 2>/dev/null | node -e '
+            let s="";
+            process.stdin.on("data",d=>s+=d).on("end",()=>{
+              try {
+                const x=JSON.parse(s);
+                const url=x?.[0]?.url || x?.deployments?.[0]?.url || "";
+                process.stdout.write(url);
+              } catch(e) {}
+            });
+          ')
+          if [ -n "$URL" ]; then
+            echo "### 🚀 Worker deployed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Worker URL:** $URL" >> "$GITHUB_STEP_SUMMARY"
+            echo "$URL" 
+          else
+            echo "Worker deployed, but URL was not returned by Wrangler."
+            echo "Check the Deploy Worker output above for the workers.dev URL."
+          fi
