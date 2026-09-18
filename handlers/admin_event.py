@@ -137,6 +137,21 @@ async def add_event_time_preset(callback: CallbackQuery, state: FSMContext):
     value = f"{parts[0]}:{parts[1]}-{parts[2]}:{parts[3]}"
     await callback.answer()
     await state.update_data(event_time=value)
+    data = await state.get_data()
+    if data.get("template_mode"):
+        if data.get("default_price") is None or not data.get("default_meeting"):
+            await callback.message.edit_text(
+                "⚠️ У выбранного маршрута не заполнены значения по умолчанию для шаблона. "
+                "Введите цену и точку встречи вручную."
+            )
+            await state.update_data(template_mode=False)
+        else:
+            await state.update_data(
+                price=data["default_price"],
+                meeting_point=data["default_meeting"],
+            )
+            await save_new_event(callback.message, state, data["default_meeting"])
+            return
     await show_price_step(callback.message, state)
 
 
