@@ -168,11 +168,11 @@ async def show_booking_review(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "booking_child")
 async def booking_child(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
     data = await state.get_data()
     if data.get("child_added"):
         await callback.answer("Ребенок уже добавлен", show_alert=True)
         return
+    await callback.answer()
     await state.update_data(child_added=True)
     await show_booking_review(callback.message, state)
 
