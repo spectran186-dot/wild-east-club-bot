@@ -58,7 +58,7 @@ class Database:
     async def get_events(self):
         connection = await self._connect()
         try:
-            cursor = await connection.execute("""SELECT events.id, events.route_id, events.event_date, events.event_time, events.price, routes.title, routes.start_point, routes.finish_point FROM events LEFT JOIN routes ON routes.id = events.route_id WHERE events.status = 'active' ORDER BY events.event_date, events.event_time""")
+            cursor = await connection.execute("""SELECT events.id, events.route_id, events.event_date, events.event_time, events.price, routes.title, routes.start_point, routes.finish_point, events.meeting_point FROM events LEFT JOIN routes ON routes.id = events.route_id WHERE events.status = 'active' ORDER BY events.event_date, events.event_time""")
             return await cursor.fetchall()
         finally:
             await connection.close()
@@ -90,7 +90,7 @@ class Database:
     async def get_event_info(self, event_id):
         connection = await self._connect()
         try:
-            cursor = await connection.execute("SELECT events.id, events.event_date, events.event_time, events.price, routes.title, routes.start_point, routes.finish_point FROM events LEFT JOIN routes ON routes.id = events.route_id WHERE events.id = ?", (event_id,))
+            cursor = await connection.execute("SELECT events.id, events.event_date, events.event_time, events.price, routes.title, routes.start_point, routes.finish_point, events.meeting_point FROM events LEFT JOIN routes ON routes.id = events.route_id WHERE events.id = ?", (event_id,))
             return await cursor.fetchone()
         finally:
             await connection.close()
