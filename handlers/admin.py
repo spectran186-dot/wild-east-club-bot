@@ -81,7 +81,7 @@ async def booking_card_keyboard(booking):
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def booking_status_labeldef booking_status_label(status):
+def booking_status_label(status):
     return {
         "new": "🆕 Новая",
         "confirmed": "✅ Подтверждена",
@@ -271,18 +271,7 @@ async def booking_status(callback: CallbackQuery):
         else "Заявка отменена" if status == "cancelled"
         else "Заявка снова активна"
     )
-    await show_booking_by_id(callback, booking_id)
-
-
-@router.callback_query(F.data.regexp(r"^booking_(next|prev)_\d+$"))
-async def booking_navigation(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("⛔ Нет доступа", show_alert=True)
-        return
-    direction = callback.data.split("_")[1]
-    booking_id = int(callback.data.split("_")[2])
-    await callback.answer()
-    await show_booking_by_id(callback, booking_id, direction)
+    await show_bookings(callback)
 
 
 @router.callback_query(F.data == "admin_events")
