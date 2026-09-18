@@ -31,15 +31,15 @@ def booking_keyboard(event_id):
 def event_text(event):
     (
         _event_id, _route_id, event_date, event_time, price,
-        route_title, start_point, finish_point,
+        route_title, start_point, finish_point, meeting_point,
     ) = event
 
     return (
         "🌊 <b>Вы выбрали мероприятие</b>\n\n"
         f"🛶 <b>{route_title}</b>\n"
-        f"📅 {event_date}\n"
+        f"📅 {event_date[8:10]}.{event_date[5:7]}.{event_date[:4]}\n"
         f"🕐 {event_time}\n"
-        f"📍 {start_point} → {finish_point}\n"
+        f"📍 {meeting_point or start_point}\n"
         f"💰 <b>{price} ₽</b>\n\n"
         "👤 Теперь введите ваше имя:"
     )
@@ -58,7 +58,7 @@ async def booking(callback: CallbackQuery, state: FSMContext):
         if event_info:
             event = (
                 event_info[0], None, event_info[1], event_info[2], event_info[3],
-                event_info[4], event_info[5], event_info[6],
+                event_info[4], event_info[5], event_info[6], event_info[7],
             )
             cache_event(event)
 
