@@ -4,6 +4,8 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.fsm.context import FSMContext
+from states.admin_event import AdminEventState
 
 from config import config
 from database import Database
@@ -205,6 +207,7 @@ async def show_event_bookings(callback: CallbackQuery, event_id: int, page: int 
     if page < total_pages - 1:
         nav.append(InlineKeyboardButton(text="Следующая ➡️", callback_data=f"booking_page_{event_id}_{page + 1}"))
     keyboard = [nav] if nav else []
+    keyboard.append([InlineKeyboardButton(text="➕ Внести заявку вручную", callback_data=f"admin_manual_booking_{event_id}")])
     keyboard.append([InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="admin_bookings")])
     await callback.message.answer(
         f"Страница {page + 1} из {total_pages}",
@@ -268,6 +271,86 @@ async def booking_page(callback: CallbackQuery):
     except Exception:
         logger.exception("Failed to load booking page")
         await callback.message.edit_text("⚠️ Не удалось загрузить страницу заявок.", reply_markup=back_keyboard())
+
+@router.callback_query(F.data.regexp(r"^admin_manual_booking_\d+$"))
+async def admin_manual_booking_start(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    event_id = int(callback.data.split("_")[-1])
+    event = await db.get_event_full(event_id)
+    if not event:
+        await callback.answer("⚠️ Мероприятие не найдено", show_alert=True)
+        return
+    await callback.answer()
+    await state.clear()
+    await state.update_data(manual_event_id=event_id)
+    await state.set_state(AdminEventState.manual_booking_name)
+    await callback.message.answer("➕ <b>Внести заявку вручную</b>\n\nВведите имя и фамилию участника:", parse_mode="HTML")
+
+@router.message(AdminEventState.manual_booking_name)
+async def admin_manual_booking_name(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    name = (message.text or "").strip()
+    if not name:
+        await message.answer("Введите имя участника.")
+        return
+    await state.update_data(manual_name=name)
+    await state.set_state(AdminEventState.manual_booking_phone)
+    await message.answer("📞 Введите телефон участника:")
+
+@router.message(AdminEventState.manual_booking_phone)
+async def admin_manual_booking_phone(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    from handlers.booking import normalize_phone
+    phone = normalize_phone((message.text or "").strip())
+    if not phone:
+        await message.answer("⚠️ Некорректный номер. Введите российский номер из 10 или 11 цифр.")
+        return
+    data = await state.get_data()
+    event_id, name = data.get("manual_event_id"), data.get("manual_name")
+    if await db.has_booking(event_id, name, phone):
+        await message.answer("ℹ️ <b>Такая заявка уже существует.</b>\n\n👤 " + name + "\n📞 " + phone, parse_mode="HTML")
+        await state.clear()
+        return
+    await state.update_data(manual_phone=phone)
+    await state.set_state(AdminEventState.manual_booking_child)
+    await message.answer("👶 Есть ребёнок с участником на SUP?", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Нет", callback_data="admin_manual_child_0"), InlineKeyboardButton(text="Да +500 ₽", callback_data="admin_manual_child_1")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_manual_cancel")],
+    ]))
+
+@router.callback_query(F.data.regexp(r"^admin_manual_child_[01]$"))
+async def admin_manual_booking_child(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    data = await state.get_data()
+    event_id, name, phone = data.get("manual_event_id"), data.get("manual_name"), data.get("manual_phone")
+    children = int(callback.data.rsplit("_", 1)[1])
+    if not event_id or not name or not phone:
+        await callback.answer("⚠️ Данные заявки потеряны", show_alert=True)
+        await state.clear()
+        return
+    if await db.has_booking(event_id, name, phone):
+        await callback.answer("Такая заявка уже существует", show_alert=True)
+        await state.clear()
+        return
+    await db.add_booking(callback.from_user.id, event_id, name, phone, children=children, comment="", status="confirmed")
+    await state.clear()
+    await callback.answer("Заявка добавлена и подтверждена")
+    await callback.message.edit_text("✅ <b>Заявка добавлена</b>\n\n👤 " + name + "\n📞 " + phone + "\n👶 Ребёнок: " + ("да" if children else "нет") + "\nСтатус: <b>Подтверждена</b>", parse_mode="HTML")
+
+@router.callback_query(F.data == "admin_manual_cancel")
+async def admin_manual_booking_cancel(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    await state.clear()
+    await callback.answer("Ввод отменён")
+    await callback.message.edit_text("❌ Внесение заявки отменено.")
 
 @router.callback_query(F.data.regexp(r"^booking_event_\d+$"))
 async def booking_event(callback: CallbackQuery):
