@@ -162,7 +162,19 @@ async def add_event_date(message: Message, state: FSMContext):
     except (ValueError, AttributeError):
         await message.answer("⚠️ Неверная дата. Используйте формат ДД.ММ.ГГГГ", reply_markup=cancel_keyboard())
         return
+
     await state.update_data(event_date=date_value.isoformat())
+    data = await state.get_data()
+
+    if data.get("copy_mode"):
+        await state.update_data(
+            price=data["price"],
+            event_time=data["event_time"],
+            meeting_point=data["meeting_point"],
+        )
+        await save_new_event(message, state, data["meeting_point"])
+        return
+
     await state.set_state(AdminEventState.waiting_time)
     await message.answer(
         "Шаг 3 из 5 — выберите время мероприятия или введите его вручную:",
@@ -307,6 +319,7 @@ def edit_fields_keyboard():
         [InlineKeyboardButton(text="🕒 Время", callback_data="edit_field_time")],
         [InlineKeyboardButton(text="💰 Цена", callback_data="edit_field_price")],
         [InlineKeyboardButton(text="📍 Точка встречи", callback_data="edit_field_meeting")],
+        [InlineKeyboardButton(text="📋 Скопировать мероприятие", callback_data="copy_event")],
         [InlineKeyboardButton(text="🗑 Удалить мероприятие", callback_data="delete_event")],
         [InlineKeyboardButton(text="⬅️ К списку мероприятий", callback_data="edit_event_back")],
     ])
@@ -538,6 +551,35 @@ async def edit_event_back(callback: CallbackQuery, state: FSMContext):
         "📅 <b>Управление мероприятиями</b>\n\n"
         "Выберите мероприятие для редактирования или создайте новое:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "copy_event")
+async def copy_event(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    data = await state.get_data()
+    if not data.get("edit_event_id"):
+        await callback.answer("⚠️ Мероприятие не найдено", show_alert=True)
+        return
+
+    await callback.answer()
+    await state.update_data(copy_mode=True)
+    await state.set_state(AdminEventState.waiting_date)
+
+    await callback.message.edit_text(
+        "📋 <b>Копирование мероприятия</b>\n\n"
+        f"🛶 {data['route_title']}\n"
+        f"🕒 {data['event_time']}\n"
+        f"💰 {data['price']} ₽\n"
+        f"📍 {data['meeting_point']}\n\n"
+        "Введите <b>новую дату</b> мероприятия в формате "
+        "<code>ДД.ММ.ГГГГ</code>:\n"
+        "Время, цена и точка встречи будут скопированы автоматически.",
+        reply_markup=cancel_keyboard(),
         parse_mode="HTML",
     )
 
