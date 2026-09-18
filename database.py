@@ -22,7 +22,7 @@ class Database:
             CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id INTEGER UNIQUE, first_name TEXT, username TEXT, phone TEXT, created_at TEXT);
             CREATE TABLE IF NOT EXISTS admins(id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id INTEGER UNIQUE, role TEXT);
             CREATE TABLE IF NOT EXISTS routes(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, start_point TEXT, finish_point TEXT, description TEXT, duration TEXT, default_price INTEGER, status TEXT DEFAULT 'active');
-            CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, route_id INTEGER, event_date TEXT, event_time TEXT, price INTEGER, max_places INTEGER DEFAULT 10, free_places INTEGER DEFAULT 10, meeting_point TEXT, status TEXT DEFAULT 'active');
+            CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, route_id INTEGER, event_date TEXT, event_time TEXT, price INTEGER, max_places INTEGER DEFAULT 30, free_places INTEGER DEFAULT 10, meeting_point TEXT, status TEXT DEFAULT 'active');
             CREATE TABLE IF NOT EXISTS bookings(id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER, telegram_id INTEGER, full_name TEXT, phone TEXT, adults INTEGER DEFAULT 1, children INTEGER DEFAULT 0, own_sup INTEGER DEFAULT 0, source TEXT, status TEXT DEFAULT 'new', comment TEXT, created_at TEXT);
             CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
             """)
@@ -49,7 +49,7 @@ class Database:
     async def add_event(self, route_id, event_date, event_time, price, meeting_point):
         connection = await self._connect()
         try:
-            cursor = await connection.execute("INSERT INTO events (route_id, event_date, event_time, price, max_places, free_places, meeting_point) VALUES (?, ?, ?, ?, 10, 10, ?)", (route_id, event_date, event_time, price, meeting_point))
+            cursor = await connection.execute("INSERT INTO events (route_id, event_date, event_time, price, max_places, free_places, meeting_point) VALUES (?, ?, ?, ?, 30, 30, ?)", (route_id, event_date, event_time, price, meeting_point))
             await connection.commit()
             return cursor.lastrowid
         finally:
@@ -244,7 +244,7 @@ class Database:
             cursor = await connection.execute("SELECT COUNT(*) FROM events")
             count = (await cursor.fetchone())[0]
             if count == 0:
-                await connection.execute("INSERT INTO events (route_id, event_date, event_time, price, max_places, free_places, meeting_point) VALUES (?, ?, ?, ?, ?, ?, ?)", (1, demo_date, demo_time, demo_price, 10, 10, "Переяславка"))
+                await connection.execute("INSERT INTO events (route_id, event_date, event_time, price, max_places, free_places, meeting_point) VALUES (?, ?, ?, ?, ?, ?, ?)", (1, demo_date, demo_time, demo_price, 30, 30, "Переяславка"))
                 await connection.commit()
                 return
             cursor = await connection.execute("SELECT id FROM events WHERE route_id = 1 AND event_date = '2026-08-30' AND event_time = '10:00-13:00' LIMIT 1")
