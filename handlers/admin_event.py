@@ -155,9 +155,6 @@ async def add_event_time_preset(callback: CallbackQuery, state: FSMContext):
     await show_price_step(callback.message, state)
 
 
-@router.callback_query(F.data == "add_event_default_price")
-async def add_event_default_price(callback: CallbackQuery, state: FSMContext):
-
 @router.message(AdminEventState.waiting_date)
 async def add_event_date(message: Message, state: FSMContext):
     try:
