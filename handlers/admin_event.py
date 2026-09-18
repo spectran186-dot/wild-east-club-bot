@@ -338,13 +338,41 @@ async def edit_menu(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "edit_event_back")
 async def edit_event_back(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
     await callback.answer()
     await state.clear()
+
+    events = await db.get_events()
+    keyboard = []
+
+    for event in events:
+        event_id, route_id, event_date, event_time, price, route_title, start_point, finish_point, meeting_point = event
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"✏️ {event_date} {event_time} — {route_title}",
+                callback_data=f"edit_event_{event_id}",
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            text="➕ Добавить мероприятие",
+            callback_data="add_event",
+        )
+    ])
+    keyboard.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_back")
+    ])
+
     await callback.message.edit_text(
-        "📅 <b>Управление мероприятиями</b>\n\nВыберите мероприятие для редактирования или создайте новое.",
+        "📅 <b>Управление мероприятиями</b>\n\n"
+        "Выберите мероприятие для редактирования или создайте новое:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode="HTML",
     )
-    await callback.message.edit_reply_markup(reply_markup=None)
 
 
 @router.callback_query(F.data == "delete_event")
