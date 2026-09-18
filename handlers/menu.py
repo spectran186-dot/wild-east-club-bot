@@ -65,15 +65,15 @@ async def show_events(message: Message):
     keyboard = []
 
     for event in events_list:
-        event_id, route_id, event_date, event_time, price, route_title, start_point, finish_point = event
+        event_id, route_id, event_date, event_time, price, route_title, start_point, finish_point, meeting_point = event
         cache_event(event)
 
         lines.extend([
             "🌊 <b>САП-сплав</b>",
             f"🛶 {route_title}",
-            f"📅 {event_date}",
+            f"📅 {event_date[8:10]}.{event_date[5:7]}.{event_date[:4]}",
             f"🕒 {event_time}",
-            f"📍 {start_point} → {finish_point}",
+            f"📍 {meeting_point or start_point}",
             f"💰 {price} ₽",
             "",
         ])
