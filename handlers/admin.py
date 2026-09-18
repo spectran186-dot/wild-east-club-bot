@@ -361,7 +361,20 @@ async def admin_manual_booking_child(callback: CallbackQuery, state: FSMContext)
     await db.add_booking(callback.from_user.id, event_id, name, phone, children=children, comment="", status="confirmed")
     await state.clear()
     await callback.answer("Заявка добавлена и подтверждена")
-    await callback.message.edit_text("✅ <b>Заявка добавлена</b>\n\n👤 " + name + "\n📞 " + phone + "\n👶 Ребёнок: " + ("да" if children else "нет") + "\nСтатус: <b>Подтверждена</b>", parse_mode="HTML")
+    await callback.message.edit_text(
+        "✅ <b>Заявка добавлена</b>\n\n"
+        "👤 " + name + "\n"
+        "📞 " + phone + "\n"
+        "👶 Ребёнок: " + ("да" if children else "нет") + "\n"
+        "Статус: <b>Подтверждена</b>\n\n"
+        "Что сделать дальше?",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Внести ещё в это мероприятие", callback_data=f"admin_manual_booking_{event_id}")],
+            [InlineKeyboardButton(text="➕ Вернуться в добавление заявок", callback_data="admin_manual_booking_menu")],
+            [InlineKeyboardButton(text="🏠 Вернуться в админ-панель", callback_data="admin_back")],
+        ]),
+    )
 
 @router.callback_query(F.data == "admin_manual_cancel")
 async def admin_manual_booking_cancel(callback: CallbackQuery, state: FSMContext):
