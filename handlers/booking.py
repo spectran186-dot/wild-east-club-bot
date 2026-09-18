@@ -71,7 +71,11 @@ async def booking(callback: CallbackQuery, state: FSMContext):
 
     await state.update_data(event_id=event_id)
     await state.set_state(BookingState.waiting_name)
-    await callback.message.edit_text(event_text(event), parse_mode="HTML")
+    await callback.message.answer(
+        "👤 <b>Введите имя участника:</b>\n\n"
+        "Можно указать имя и фамилию.",
+        parse_mode="HTML",
+    )
 
 
 @router.message(BookingState.waiting_name)
