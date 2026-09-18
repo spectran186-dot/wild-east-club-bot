@@ -86,14 +86,47 @@ class Database:
             await connection.close()
 
     async def has_booking(self, event_id, full_name, phone):
+        def normalize_phone(value):
+            digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+            if digits.startswith("8") and len(digits) == 11:
+                digits = "7" + digits[1:]
+            elif len(digits) == 10:
+                digits = "7" + digits
+            elif not (digits.startswith("7") and len(digits) == 11):
+                return None
+            return digits
+
+        target_phone = normalize_phone(phone)
+        if not target_phone:
+            return False
+
         connection = await self._connect()
         try:
-            cursor = await connection.execute("""SELECT 1 FROM bookings WHERE event_id = ? AND LOWER(TRIM(full_name)) = LOWER(TRIM(?)) AND REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') = REPLACE(REPLACE(REPLACE(REPLACE(?, ' ', ''), '-', ''), '(', ''), ')', '') AND status NOT IN ('cancelled', 'canceled') LIMIT 1""", (event_id, full_name, phone))
-            return await cursor.fetchone() is not None
+            cursor = await connection.execute(
+                """SELECT full_name, phone FROM bookings
+                   WHERE event_id = ?
+                     AND LOWER(TRIM(full_name)) = LOWER(TRIM(?))
+                     AND status NOT IN ('cancelled', 'canceled')""",
+                (event_id, full_name),
+            )
+            rows = await cursor.fetchall()
+            return any(normalize_phone(row[1]) == target_phone for row in rows)
         finally:
             await connection.close()
 
     async def add_booking(self, telegram_id, event_id, full_name, phone, children=0, comment=""):
+        def normalize_phone(value):
+            digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+            if digits.startswith("8") and len(digits) == 11:
+                digits = "7" + digits[1:]
+            elif len(digits) == 10:
+                digits = "7" + digits
+            elif not (digits.startswith("7") and len(digits) == 11):
+                return None
+            return f"+{digits}"
+
+        phone = normalize_phone(phone) or phone
+
         connection = await self._connect()
         try:
             await connection.execute(
