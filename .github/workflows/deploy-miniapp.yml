@@ -1,6 +1,9 @@
 name: Deploy Wild East Club Mini App
 
 on:
+  push:
+    branches:
+      - feature/mini-app-cloudflare-2026-09-18
   workflow_run:
     workflows: ["Provision Wild East Club D1"]
     types: [completed]
