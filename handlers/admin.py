@@ -52,29 +52,36 @@ async def booking_card_keyboard(booking):
     booking_id, event_id, telegram_id, full_name, phone, created_at, event_date, event_time, route_title, children, comment, status, max_places = booking
     buttons = []
 
-    if status == "confirmed":
-        buttons.append([InlineKeyboardButton(text="↩️ Вернуть в новые", callback_data=f"booking_status_new_{booking_id}")])
-    elif status in ("cancelled", "canceled"):
-        buttons.append([InlineKeyboardButton(text="↩️ Вернуть в новые", callback_data=f"booking_status_new_{booking_id}")])
+    if status in ("cancelled", "canceled"):
+        buttons.append([
+            InlineKeyboardButton(
+                text="↩️ Вернуть в новые",
+                callback_data=f"booking_status_new_{booking_id}",
+            )
+        ])
+    elif status == "confirmed":
+        buttons.append([
+            InlineKeyboardButton(
+                text="↩️ Вернуть в новые",
+                callback_data=f"booking_status_new_{booking_id}",
+            )
+        ])
     else:
         buttons.append([
-            InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"booking_status_confirmed_{booking_id}"),
-            InlineKeyboardButton(text="❌ Отменить", callback_data=f"booking_status_cancelled_{booking_id}"),
+            InlineKeyboardButton(
+                text="✅ Подтвердить",
+                callback_data=f"booking_status_confirmed_{booking_id}",
+            ),
+            InlineKeyboardButton(
+                text="❌ Отменить",
+                callback_data=f"booking_status_cancelled_{booking_id}",
+            ),
         ])
 
-    buttons.append([
-        InlineKeyboardButton(text="📞 Позвонить", callback_data=f"booking_phone_{booking_id}"),
-        InlineKeyboardButton(text="💬 Написать", url=f"tg://user?id={telegram_id}"),
-    ])
-    buttons.append([
-        InlineKeyboardButton(text="⬅️ Предыдущая", callback_data=f"booking_prev_{booking_id}"),
-        InlineKeyboardButton(text="Следующая ➡️", callback_data=f"booking_next_{booking_id}"),
-    ])
-    buttons.append([InlineKeyboardButton(text="🏠 Админ-панель", callback_data="admin_back")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def booking_status_label(status):
+def booking_status_labeldef booking_status_label(status):
     return {
         "new": "🆕 Новая",
         "confirmed": "✅ Подтверждена",
@@ -127,36 +134,65 @@ async def show_bookings(callback: CallbackQuery):
         )
         return
 
-    booking = bookings[0]
-    booked_count, max_places = await db.get_event_booking_stats(booking[1])
+    lines = ["📋 <b>Заявки</b>", ""]
+
+    for index, booking in enumerate(bookings, start=1):
+        (
+            booking_id, event_id, telegram_id, full_name, phone, created_at,
+            event_date, event_time, route_title, children, comment, status, max_places,
+        ) = booking
+
+        date_display = (
+            f"{event_date[8:10]}.{event_date[5:7]}.{event_date[:4]}"
+            if event_date else "—"
+        )
+
+        lines.extend([
+            f"<b>{index}. 👤 {full_name}</b>",
+            f"📞 {phone}",
+            f"🛶 {route_title or 'Маршрут не указан'}",
+            f"📅 {date_display}  🕒 {event_time or '—'}",
+            f"👶 Ребёнок: {'да' if children else 'нет'}",
+        ])
+
+        if comment:
+            lines.append(f"💬 {comment}")
+
+        lines.append(f"{booking_status_label(status)}")
+        lines.append("──────────────")
+
+    keyboard = []
+    for booking in bookings:
+        booking_id = booking[0]
+        status = booking[11]
+        if status in ("cancelled", "canceled", "confirmed"):
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"↩️ #{booking_id} — Вернуть в новые",
+                    callback_data=f"booking_status_new_{booking_id}",
+                )
+            ])
+        else:
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"✅ #{booking_id}",
+                    callback_data=f"booking_status_confirmed_{booking_id}",
+                ),
+                InlineKeyboardButton(
+                    text=f"❌ #{booking_id}",
+                    callback_data=f"booking_status_cancelled_{booking_id}",
+                ),
+            ])
+
+    keyboard.append([
+        InlineKeyboardButton(text="🏠 Админ-панель", callback_data="admin_back")
+    ])
+
     await callback.message.edit_text(
-        format_booking_card(booking, booked_count, max_places),
-        reply_markup=await booking_card_keyboard(booking),
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode="HTML",
     )
-
-
-async def show_booking_by_id(callback: CallbackQuery, booking_id: int, direction=None):
-    bookings = await db.get_bookings()
-    index = next((i for i, item in enumerate(bookings) if item[0] == booking_id), None)
-
-    if index is None:
-        await callback.answer("⚠️ Заявка не найдена", show_alert=True)
-        return
-
-    if direction == "next":
-        index = (index + 1) % len(bookings)
-    elif direction == "prev":
-        index = (index - 1) % len(bookings)
-
-    booking = bookings[index]
-    booked_count, max_places = await db.get_event_booking_stats(booking[1])
-    await callback.message.edit_text(
-        format_booking_card(booking, booked_count, max_places),
-        reply_markup=await booking_card_keyboard(booking),
-        parse_mode="HTML",
-    )
-
 
 async def show_events(callback: CallbackQuery):
     events = await db.get_events()
@@ -236,23 +272,6 @@ async def booking_status(callback: CallbackQuery):
         else "Заявка снова активна"
     )
     await show_booking_by_id(callback, booking_id)
-
-
-@router.callback_query(F.data.regexp(r"^booking_phone_\d+$"))
-async def booking_phone(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("⛔ Нет доступа", show_alert=True)
-        return
-
-    booking_id = int(callback.data.split("_")[2])
-    bookings = await db.get_bookings()
-    booking = next((item for item in bookings if item[0] == booking_id), None)
-
-    if booking is None:
-        await callback.answer("⚠️ Заявка не найдена", show_alert=True)
-        return
-
-    await callback.answer(f"📞 {booking[4]}", show_alert=True)
 
 
 @router.callback_query(F.data.regexp(r"^booking_(next|prev)_\d+$"))
