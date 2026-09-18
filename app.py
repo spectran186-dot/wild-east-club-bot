@@ -33,10 +33,11 @@ async def main():
     if not config.config.owner_id:
         raise RuntimeError("OWNER_ID is not configured")
 
+    if not config.config.database_url:
+        raise RuntimeError("DATABASE_URL is not configured")
+
     db = database.Database()
     await db.create_tables()
-    await db.create_demo_routes()
-    await db.create_demo_events()
 
     bot = Bot(config.config.bot_token)
     await bot.delete_webhook(drop_pending_updates=True)
