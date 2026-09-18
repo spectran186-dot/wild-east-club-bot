@@ -54,27 +54,13 @@ jobs:
           if [ ! -s /tmp/dbid ]; then
             wrangler d1 create wild-east-club --location=weur > /tmp/create.txt
             cat /tmp/create.txt
-            python - <<'PY'
-            import re
-            from pathlib import Path
-            s=Path("/tmp/create.txt").read_text()
-            m=re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}", s)
-            if not m:
-                raise SystemExit("Could not determine newly created D1 database ID from Wrangler output")
-            Path("/tmp/dbid").write_text(m.group(0))
-            PY
-            exit 0
-            #
-            python - <<'PY'
-          import json
-          data=json.load(open("/tmp/create.json"))
-          result=data.get("result", data) if isinstance(data, dict) else data
-          dbid=result.get("uuid") or result.get("database_id") or result.get("id")
-          if not dbid:
-              raise SystemExit("Could not determine newly created D1 database ID")
-          print(f"Created D1: {dbid}")
-          open("/tmp/dbid","w").write(dbid)
-          PY
+            DB_ID=$(sed -n 's/.*database_id = "\([^"]*\)".*/\1/p' /tmp/create.txt | head -n 1)
+            if [ -z "$DB_ID" ]; then
+              echo "Could not determine newly created D1 database ID"
+              exit 1
+            fi
+            echo "Created D1: $DB_ID"
+            printf '%s' "$DB_ID" > /tmp/dbid
           fi
 
           echo "DB_ID=$(cat /tmp/dbid)" >> "$GITHUB_ENV"
