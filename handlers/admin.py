@@ -78,6 +78,13 @@ async def booking_card_keyboard(booking):
             ),
         ])
 
+    buttons.append([
+        InlineKeyboardButton(
+            text="⬅️ Вернуться назад",
+            callback_data=f"booking_event_{event_id}",
+        )
+    ])
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -151,7 +158,7 @@ async def show_bookings(callback: CallbackQuery):
         booked_count, max_places = await db.get_event_booking_stats(event_id)
         keyboard.append([
             InlineKeyboardButton(
-                text=f"📅 {date_display} {event_time or ''} — {route_title or 'Маршрут'} ({booked_count}/{max_places})",
+                text=f"📅 {date_display} {event_time or ''}\n🛶 {route_title or 'Маршрут'} · {booked_count}/{max_places}",
                 callback_data=f"booking_event_{event_id}",
             )
         ])
