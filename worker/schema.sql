@@ -5,3 +5,4 @@ CREATE TABLE IF NOT EXISTS admins (telegram_id INTEGER PRIMARY KEY,role TEXT DEF
 CREATE INDEX IF NOT EXISTS idx_events_status_date ON events(status,event_date,event_time);
 CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_duplicate ON bookings(event_id,full_name,phone);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_active_person ON bookings(event_id,lower(trim(full_name)),phone) WHERE status NOT IN ('cancelled','canceled');
