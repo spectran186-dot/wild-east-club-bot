@@ -92,7 +92,7 @@ async def show_events(callback: CallbackQuery):
         event_id, route_id, event_date, event_time, price, route_title, start_point, finish_point, meeting_point = event
         keyboard.append([
             InlineKeyboardButton(
-                text=f"✏️ {event_date} {event_time} — {route_title}",
+                text=f"✏️ {event_date[8:10]}-{event_date[5:7]}-{event_date[:4]} {event_time} — {route_title}",
                 callback_data=f"edit_event_{event_id}",
             )
         ])
