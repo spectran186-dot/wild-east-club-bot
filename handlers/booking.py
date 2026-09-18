@@ -108,7 +108,7 @@ async def get_phone(message: Message, state: FSMContext):
     if event:
         (
             _event_id, _route_id, event_date, event_time, price,
-            route_title, start_point, finish_point,
+            route_title, start_point, finish_point, _meeting_point,
         ) = event
         event_info = (
             f"🛶 Маршрут: {route_title}\n"
@@ -195,7 +195,7 @@ async def booking_confirm(callback: CallbackQuery, state: FSMContext):
         if event:
             (
                 _event_id, _route_id, event_date, event_time, price,
-                route_title, _start_point, _finish_point,
+                route_title, _start_point, _finish_point, _meeting_point,
             ) = event
 
             try:
