@@ -139,7 +139,7 @@ async def show_bookings(callback: CallbackQuery):
         booked_count, max_places = await db.get_event_booking_stats(event_id)
         keyboard.append([
             InlineKeyboardButton(
-                text=f"📅 {date_display[:5]} | {event_time or '—'}\\n🛶 {route_title or 'Маршрут'}",
+                text=f"📅 {date_display[:5]} | {event_time or '—'}\n🛶 {route_title or 'Маршрут'}",
                 callback_data=f"booking_event_{event_id}",
             )
         ])
@@ -367,7 +367,7 @@ async def admin_reports(callback: CallbackQuery):
             revenue += price + int(booking[9] or 0) * 500
         keyboard.append([
             InlineKeyboardButton(
-                text=f"📊 {route_bookings[0][6][8:10]}.{route_bookings[0][6][5:7]} | {route_bookings[0][7] or '—'}\\n🛶 {route_title}\\n👥 {people} · 🏄 {boards} · 💰 {revenue:,} ₽".replace(",", " "),
+                text=f"📊 {route_bookings[0][6][8:10]}.{route_bookings[0][6][5:7]} | {route_bookings[0][7] or '—'}\n🛶 {route_title}\n👥 {people} · 🏄 {boards} · 💰 {revenue:,} ₽".replace(",", " "),
                 callback_data=f"report_route_{route_bookings[0][1]}",
             )
         ])
