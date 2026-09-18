@@ -124,11 +124,11 @@ def format_booking_review(data, event):
             route_title, start_point, finish_point, meeting_point,
         ) = event
         event_info = (
-            f"🛶 Маршрут: {route_title}\\n"
-            f"📅 Дата: {event_date[8:10]}.{event_date[5:7]}.{event_date[:4]}\\n"
-            f"🕐 Время: {event_time}\\n"
-            f"📍 {meeting_point or start_point}\\n"
-            f"💰 Стоимость: {price} ₽\\n\\n"
+            f"🛶 Маршрут: {route_title}\n"
+            f"📅 Дата: {event_date[8:10]}.{event_date[5:7]}.{event_date[:4]}\n"
+            f"🕐 Время: {event_time}\n"
+            f"📍 {meeting_point or start_point}\n"
+            f"💰 Стоимость: {price} ₽\n\n"
         )
     else:
         event_info = ""
@@ -153,7 +153,7 @@ def format_booking_review(data, event):
     if event:
         lines.append(f"💰 <b>Итого: {total} ₽</b>")
     lines.extend(["", "Всё верно?"])
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 async def show_booking_review(message: Message, state: FSMContext):
