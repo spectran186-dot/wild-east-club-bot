@@ -1,0 +1,24 @@
+services:
+  - type: worker
+    name: wild-east-club-bot
+    runtime: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    autoDeployTrigger: commit
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: OWNER_ID
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: wild-east-club-db
+          property: connectionString
+
+databases:
+  - name: wild-east-club-db
+    plan: free
+    region: singapore
+    postgresMajorVersion: 18
