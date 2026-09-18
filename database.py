@@ -90,6 +90,22 @@ class Database:
         finally:
             await connection.close()
 
+    async def get_event_full(self, event_id):
+        connection = await self._connect()
+        try:
+            cursor = await connection.execute(
+                """SELECT events.id, events.route_id, events.event_date, events.event_time,
+                          events.price, routes.title, routes.start_point, routes.finish_point,
+                          events.meeting_point
+                   FROM events
+                   LEFT JOIN routes ON routes.id = events.route_id
+                   WHERE events.id = ? AND events.status = 'active'""",
+                (event_id,),
+            )
+            return await cursor.fetchone()
+        finally:
+            await connection.close()
+
     async def get_event(self, event_id):
         connection = await self._connect()
         try:
