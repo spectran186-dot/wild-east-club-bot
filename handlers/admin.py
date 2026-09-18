@@ -89,7 +89,7 @@ async def show_events(callback: CallbackQuery):
     keyboard = []
 
     for event in events:
-        event_id, route_id, event_date, event_time, price, route_title, start_point, finish_point = event
+        event_id, route_id, event_date, event_time, price, route_title, start_point, finish_point, meeting_point = event
         keyboard.append([
             InlineKeyboardButton(
                 text=f"✏️ {event_date} {event_time} — {route_title}",
