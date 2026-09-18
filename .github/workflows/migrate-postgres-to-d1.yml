@@ -1,0 +1,108 @@
+name: Migrate PostgreSQL to D1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Mini App branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/mini-app-cloudflare-2026-09-18
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PostgreSQL driver
+        run: pip install "psycopg[binary]"
+
+      - name: Export PostgreSQL data
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -e
+          if [ -z "$DATABASE_URL" ]; then
+            echo "GitHub secret DATABASE_URL is not configured."
+            exit 1
+          fi
+          python - <<'PY'
+          import os
+          from psycopg import connect
+
+          def q(v):
+              if v is None:
+                  return "NULL"
+              if isinstance(v, bool):
+                  return "1" if v else "0"
+              if isinstance(v, (int, float)):
+                  return str(v)
+              s = str(v).replace("'", "''")
+              return "'" + s + "'"
+
+          with connect(os.environ["DATABASE_URL"]) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT id,title,start_point,finish_point,description,duration,default_price,status FROM routes ORDER BY id")
+                  routes = cur.fetchall()
+
+                  cur.execute("SELECT id,route_id,event_date,event_time,price,max_places,free_places,meeting_point,status FROM events ORDER BY id")
+                  events = cur.fetchall()
+
+                  cur.execute("SELECT id,event_id,telegram_id,full_name,phone,adults,children,own_sup,source,status,comment,created_at FROM bookings ORDER BY id")
+                  bookings = cur.fetchall()
+
+                  cur.execute("SELECT telegram_id,role FROM admins ORDER BY telegram_id")
+                  admins = cur.fetchall()
+
+          with open("/tmp/migration.sql", "w", encoding="utf-8") as f:
+              f.write("PRAGMA foreign_keys=OFF;\n")
+              f.write("BEGIN TRANSACTION;\n")
+
+              for r in routes:
+                  f.write("INSERT OR REPLACE INTO routes(id,title,start_point,finish_point,description,duration,default_price,status) VALUES (%s);\n" % ",".join(q(x) for x in r))
+
+              for e in events:
+                  f.write("INSERT OR REPLACE INTO events(id,route_id,event_date,event_time,price,max_places,free_places,meeting_point,status) VALUES (%s);\n" % ",".join(q(x) for x in e))
+
+              for b in bookings:
+                  f.write("INSERT OR REPLACE INTO bookings(id,event_id,telegram_id,full_name,phone,adults,children,own_sup,source,status,comment,created_at) VALUES (%s);\n" % ",".join(q(x) for x in b))
+
+              for a in admins:
+                  f.write("INSERT OR REPLACE INTO admins(telegram_id,role) VALUES (%s);\n" % ",".join(q(x) for x in a))
+
+              f.write("COMMIT;\n")
+              f.write("PRAGMA foreign_keys=ON;\n")
+
+          print(f"Exported routes={len(routes)}, events={len(events)}, bookings={len(bookings)}, admins={len(admins)}")
+          PY
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@latest
+
+      - name: Migrate data into D1
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -e
+          wrangler d1 execute wild-east-club --remote --file=/tmp/migration.sql
+
+      - name: Verify migrated data
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          wrangler d1 execute wild-east-club --remote --command="SELECT 'routes' table_name, COUNT(*) count FROM routes UNION ALL SELECT 'events', COUNT(*) FROM events UNION ALL SELECT 'bookings', COUNT(*) FROM bookings UNION ALL SELECT 'admins', COUNT(*) FROM admins;"
