@@ -202,7 +202,7 @@ class Database:
         try:
             cursor = await connection.execute(
                 """SELECT
-                       COUNT(CASE WHEN status NOT IN ('cancelled', 'canceled') THEN 1 END),
+                       COUNT(CASE WHEN bookings.status NOT IN ('cancelled', 'canceled') THEN 1 END),
                        COALESCE(MAX(events.max_places), 10)
                    FROM bookings
                    LEFT JOIN events ON events.id = bookings.event_id
