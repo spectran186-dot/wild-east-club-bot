@@ -139,7 +139,7 @@ class Database:
     async def get_bookings(self):
         connection = await self._connect()
         try:
-            cursor = await connection.execute("SELECT bookings.id, bookings.full_name, bookings.phone, bookings.created_at, events.event_date, events.event_time, routes.title FROM bookings LEFT JOIN events ON events.id = bookings.event_id LEFT JOIN routes ON routes.id = events.route_id ORDER BY bookings.id DESC")
+            cursor = await connection.execute("SELECT bookings.id, bookings.full_name, bookings.phone, bookings.created_at, events.event_date, events.event_time, routes.title, bookings.children, bookings.comment FROM bookings LEFT JOIN events ON events.id = bookings.event_id LEFT JOIN routes ON routes.id = events.route_id ORDER BY bookings.id DESC")
             return await cursor.fetchall()
         finally:
             await connection.close()
