@@ -91,7 +91,36 @@ async def add_event_time(message: Message, state: FSMContext):
     await state.update_data(event_time=value)
     await state.set_state(AdminEventState.waiting_price)
     data = await state.get_data()
-    await message.answer(f"Шаг 4 из 5 — введите цену в рублях. По умолчанию для маршрута: <b>{data['default_price']} ₽</b>.", reply_markup=cancel_keyboard(), parse_mode="HTML")
+    await message.answer(
+        f"Шаг 4 из 5 — введите цену в рублях. По умолчанию для маршрута: <b>{data['default_price']} ₽</b>.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💰 По умолчанию", callback_data="add_event_default_price")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_event_cancel")],
+        ]),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "add_event_default_price")
+async def add_event_default_price(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    data = await state.get_data()
+    default_price = data.get("default_price")
+    if default_price is None:
+        await callback.answer("⚠️ Цена по умолчанию не найдена", show_alert=True)
+        return
+    await callback.answer("Цена по умолчанию подставлена")
+    await state.update_data(price=default_price)
+    await state.set_state(AdminEventState.waiting_meeting_point)
+    await callback.message.edit_text(
+        "Шаг 5 из 5 — введите точку встречи:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📍 По умолчанию", callback_data="add_event_default_meeting")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_event_cancel")],
+        ]),
+    )
 
 
 @router.message(AdminEventState.waiting_price)
@@ -105,7 +134,30 @@ async def add_event_price(message: Message, state: FSMContext):
         return
     await state.update_data(price=price)
     await state.set_state(AdminEventState.waiting_meeting_point)
-    await message.answer("Шаг 5 из 5 — введите точку встречи:", reply_markup=cancel_keyboard())
+    await message.answer(
+        "Шаг 5 из 5 — введите точку встречи:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📍 По умолчанию", callback_data="add_event_default_meeting")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_event_cancel")],
+        ]),
+    )
+
+
+@router.callback_query(F.data == "add_event_default_meeting")
+async def add_event_default_meeting(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    data = await state.get_data()
+    route_id = data.get("route_id")
+    routes = await db.get_routes()
+    route = next((item for item in routes if item[0] == route_id), None)
+    default_meeting = route[2] if route else None
+    if not default_meeting:
+        await callback.answer("⚠️ Стартовая точка маршрута не задана", show_alert=True)
+        return
+    await callback.answer("Точка встречи по умолчанию подставлена")
+    await save_new_event(callback.message, state, default_meeting)
 
 
 @router.message(AdminEventState.waiting_meeting_point)
@@ -114,8 +166,15 @@ async def add_event_meeting_point(message: Message, state: FSMContext):
     if not meeting_point:
         await message.answer("⚠️ Точка встречи не может быть пустой.", reply_markup=cancel_keyboard())
         return
+    await save_new_event(message, state, meeting_point)
+
+
+async def save_new_event(message, state, meeting_point):
     data = await state.get_data()
-    event_id = await db.add_event(data["route_id"], data["event_date"], data["event_time"], data["price"], meeting_point)
+    event_id = await db.add_event(
+        data["route_id"], data["event_date"], data["event_time"],
+        data["price"], meeting_point
+    )
     await state.clear()
     date_display = datetime.strptime(data["event_date"], "%Y-%m-%d").strftime("%d.%m.%Y")
     await message.answer(
@@ -147,6 +206,7 @@ async def add_event_meeting_point(message: Message, state: FSMContext):
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode="HTML",
     )
+
 
 
 @router.callback_query(F.data == "admin_event_cancel")
