@@ -409,7 +409,8 @@ async def report_route(callback: CallbackQuery):
         price = int(event[3] or 0) if event else 0
         first = event_bookings[0]
         date_display = f"{first[6][8:10]}.{first[6][5:7]}.{first[6][:4]}" if first[6] else "—"
-        lines.append(f"<b>📅 {date_display} · {first[7] or "—"}</b>")
+        event_time = first[7] or "—"
+        lines.append(f"<b>📅 {date_display} · {event_time}</b>")
         for booking in event_bookings:
             name = booking[3] or "—"
             phone = booking[4] or "—"
