@@ -162,15 +162,3 @@ async def admin_events(callback: CallbackQuery):
         )
 
 
-@router.callback_query(F.data.startswith("edit_event_"))
-async def edit_event_placeholder(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("⛔ Нет доступа", show_alert=True)
-        return
-
-    await callback.answer(
-        "✏️ Редактирование мероприятий пока не реализовано.",
-        show_alert=True,
-    )
-
-
