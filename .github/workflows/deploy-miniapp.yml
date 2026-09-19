@@ -165,8 +165,8 @@ jobs:
           WORKER_URL: ${{ env.WORKER_URL }}
         run: |
           set -e
-          curl -fsS -H "Cache-Control: no-cache" -o tourist.html "$WORKER_URL/?v=$GITHUB_SHA"
-          curl -fsS -H "Cache-Control: no-cache" -o admin.html "$WORKER_URL/admin.html?v=$GITHUB_SHA"
+          curl -fsSL -H "Cache-Control: no-cache" -o tourist.html "$WORKER_URL/?v=$GITHUB_SHA"
+          curl -fsSL -H "Cache-Control: no-cache" -o admin.html "$WORKER_URL/admin.html?v=$GITHUB_SHA"
           echo "Tourist title:"; grep -o '<title>[^<]*</title>' tourist.html | head -n 1
           echo "Admin response:"; head -c 400 admin.html; echo
           echo "Admin title:"; grep -o '<title>.*</title>' admin.html | head -n 1
