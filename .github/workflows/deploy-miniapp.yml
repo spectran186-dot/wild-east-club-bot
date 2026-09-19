@@ -43,8 +43,17 @@ jobs:
           from pathlib import Path
           import re, subprocess, tempfile
           html=Path("../miniapp/index.html").read_text(encoding="utf-8")
-          scripts=re.findall(r"<script>([\\s\\S]*?)</script>", html)
-          if not scripts or not any(s.strip() for s in scripts):
+          marker="<script>"
+          end="</script>"
+          if marker not in html or end not in html:
+              raise SystemExit("No inline JavaScript found in Mini App")
+          scripts=[]
+          rest=html
+          while marker in rest and end in rest:
+              rest=rest.split(marker,1)[1]
+              script,rest=rest.split(end,1)
+              scripts.append(script)
+          if not any(s.strip() for s in scripts):
               raise SystemExit("No inline JavaScript found in Mini App")
           js="\n".join(scripts)
           Path("/tmp/miniapp.js").write_text(js,encoding="utf-8")
