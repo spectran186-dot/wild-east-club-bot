@@ -160,6 +160,20 @@ jobs:
           echo "**Pending updates:** $PENDING" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$LAST_ERROR" ]; then echo "**Last Telegram error:** $LAST_ERROR" >> "$GITHUB_STEP_SUMMARY"; else echo "**Last Telegram error:** none" >> "$GITHUB_STEP_SUMMARY"; fi
 
+      - name: Verify live Mini App pages
+        env:
+          WORKER_URL: ${{ env.WORKER_URL }}
+        run: |
+          set -e
+          curl -fsS -o tourist.html "$WORKER_URL/"
+          curl -fsS -o admin.html "$WORKER_URL/admin.html"
+          grep -q '<title>Wild East Club</title>' tourist.html
+          grep -q 'Административная панель' admin.html
+          if grep -q 'adminTab' tourist.html || grep -q 'Административная панель' tourist.html; then
+            echo "Tourist page contains admin UI."
+            exit 1
+          fi
+          echo "Live Mini App pages: OK"
       - name: Verify live API
         env:
           WORKER_URL: ${{ env.WORKER_URL }}
