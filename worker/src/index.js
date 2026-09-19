@@ -36,7 +36,8 @@ async function handleTelegramWebhook(request,env){
     const userId=message.from?.id;
     const ids=String(env.ADMIN_IDS||env.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean);for(const id of ids){await env.DB.prepare("INSERT OR IGNORE INTO admins(telegram_id,role) VALUES(?,?)").bind(Number(id),"admin").run()}const isAdmin=ids.includes(String(userId))||(userId&&!!(await env.DB.prepare("SELECT 1 FROM admins WHERE telegram_id=?").bind(userId).first()));
     if(isAdmin){
-      const appUrl=String(env.MINIAPP_URL||new URL(request.url).origin);\n      const adminUrl=new URL("/admin.html",appUrl).toString();
+      const appUrl=String(env.MINIAPP_URL||new URL(request.url).origin);
+      const adminUrl=new URL("/admin.html",appUrl).toString();
       await telegramSend(env,chatId,"👨‍💼 Административная панель",{
         inline_keyboard:[[{text:"Открыть админ-панель",web_app:{url:adminUrl}}]]
       });
