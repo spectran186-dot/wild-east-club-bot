@@ -111,9 +111,13 @@ jobs:
           WORKER_URL: ${{ env.WORKER_URL }}
         run: |
           SECRET=$(printf '%s' "$BOT_TOKEN" | openssl dgst -sha256 -hmac "webhook-secret" -binary | xxd -p -c 256)
-          RESPONSE=$(curl -sS -X POST "https://api.telegram.org/bot$BOT_TOKEN/setWebhook" -H "Content-Type: application/json" --data-raw "{\"url\":\"$WORKER_URL/telegram/webhook\",\"secret_token\":\"$SECRET\",\"drop_pending_updates\":true}")
-          echo "$RESPONSE"
-          echo "$RESPONSE" | grep -q '"ok":true' || exit 1
+          for attempt in 1 2 3 4 5; do
+            RESPONSE=$(curl -sS -X POST "https://api.telegram.org/bot$BOT_TOKEN/setWebhook" -H "Content-Type: application/json" --data-raw "{\"url\":\"$WORKER_URL/telegram/webhook\",\"secret_token\":\"$SECRET\",\"drop_pending_updates\":true}")
+            echo "$RESPONSE"
+            if echo "$RESPONSE" | grep -q '"ok":true'; then break; fi
+            if echo "$RESPONSE" | grep -q '"error_code":429'; then sleep 2; else exit 1; fi
+            if [ "$attempt" = "5" ]; then exit 1; fi
+          done
           echo "### ✅ Telegram webhook configured" >> "$GITHUB_STEP_SUMMARY"
           echo "**Webhook:** $WORKER_URL/telegram/webhook" >> "$GITHUB_STEP_SUMMARY"
 
