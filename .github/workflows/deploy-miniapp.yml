@@ -117,6 +117,20 @@ jobs:
           echo "### ✅ Telegram webhook configured" >> "$GITHUB_STEP_SUMMARY"
           echo "**Webhook:** $WORKER_URL/telegram/webhook" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Configure Telegram command menu
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          set -e
+          DEFAULT='{"commands":[{"command":"start","description":"Открыть Wild East Club"}]}'
+          curl -sS -X POST "https://api.telegram.org/bot$BOT_TOKEN/setMyCommands" -H "Content-Type: application/json" --data-raw "$DEFAULT" | tee commands-default.json
+          grep -q '"ok":true' commands-default.json
+          for ADMIN_ID in 323262204 462776734; do
+            PAYLOAD=$(printf '{"scope":{"type":"chat","chat_id":%s},"commands":[{"command":"start","description":"Открыть Wild East Club"},{"command":"admin","description":"Административная панель"}]}' "$ADMIN_ID")
+            curl -sS -X POST "https://api.telegram.org/bot$BOT_TOKEN/setMyCommands" -H "Content-Type: application/json" --data-raw "$PAYLOAD" | tee "commands-$ADMIN_ID.json"
+            grep -q '"ok":true' "commands-$ADMIN_ID.json"
+          done
+          echo "Telegram command menu configured"
       - name: Verify Telegram webhook
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
