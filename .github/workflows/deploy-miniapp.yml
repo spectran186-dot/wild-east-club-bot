@@ -42,8 +42,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           pages = ["../miniapp/index.html", "../miniapp/admin.html"]
-          all_js = []
-          for page in pages:
+          for i, page in enumerate(pages):
               html = Path(page).read_text(encoding="utf-8")
               marker = "<script>"
               end = "</script>"
@@ -57,11 +56,13 @@ jobs:
                   scripts.append(script)
               if not any(s.strip() for s in scripts):
                   raise SystemExit(f"No inline JavaScript found in {page}")
-              all_js.extend(scripts)
-          Path("/tmp/miniapp-all.js").write_text("\n".join(all_js), encoding="utf-8")
-          print("Validated:", ", ".join(pages))
+              out = Path(f"/tmp/miniapp-{i}.js")
+              out.write_text("\n".join(scripts), encoding="utf-8")
+              print(f"Validating {page}")
+              import subprocess
+              subprocess.run(["node", "--check", str(out)], check=True)
+          print("JavaScript syntax (tourist + admin): OK")
           PY
-          node --check /tmp/miniapp-all.js
           echo "JavaScript syntax (tourist + admin): OK"
 
       - name: Verify Wrangler
