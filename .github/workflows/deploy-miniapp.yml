@@ -118,6 +118,14 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure route type column
+        run: |
+          set +e
+          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE routes ADD COLUMN type TEXT DEFAULT 'sup';"
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then echo "Route type column already exists or migration was not applicable; continuing."; fi
+
       - name: Configure Telegram bot secret
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
