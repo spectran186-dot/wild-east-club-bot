@@ -61,11 +61,12 @@ jobs:
           home = ImageEnhance.Sharpness(home).enhance(1.7)
           home = home.filter(ImageFilter.UnsharpMask(radius=1.2, percent=120, threshold=3))
           home.save(out/"home.jpg", quality=92, optimize=True, progressive=True)
+          w, h = src.size
           crops = {
-              "event-1.jpg": (0, 140, src.width, 760),
-              "event-2.jpg": (250, 130, src.width, 620),
-              "event-3.jpg": (0, 430, src.width, 850),
-              "event-4.jpg": (285, 0, src.width, 570),
+              "event-1.jpg": (0, int(h*0.14), w, int(h*0.78)),
+              "event-2.jpg": (int(w*0.35), int(h*0.12), w, int(h*0.64)),
+              "event-3.jpg": (0, int(h*0.42), w, int(h*0.88)),
+              "event-4.jpg": (int(w*0.40), 0, w, int(h*0.62)),
           }
           for name, box in crops.items():
               im = src.crop(box).resize((1000,620), Image.Resampling.LANCZOS)
