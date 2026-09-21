@@ -15,3 +15,7 @@ database_id = "2f42f260-35be-4050-af64-36a53fbdc27e"
 ADMIN_ID = "462776734"
 ADMIN_IDS = "323262204,462776734"
 
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "wild-east-club-media"
