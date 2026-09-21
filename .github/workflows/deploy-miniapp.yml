@@ -170,7 +170,7 @@ jobs:
           fi
           printf "%s" "$GITHUB_TOKEN_SECRET" | wrangler secret put GITHUB_TOKEN
 
-      - name: Deploy Worker
+      - name: Ensure R2 media bucket\n        env:\n          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}\n          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}\n        run: |\n          npx wrangler r2 bucket create wild-east-club-media || true\n\n      - name: Deploy Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
