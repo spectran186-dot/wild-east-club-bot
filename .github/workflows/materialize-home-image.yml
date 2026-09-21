@@ -1,0 +1,30 @@
+name: Materialize uploaded home image
+
+on:
+  push:
+    branches: [feature/mini-app-cloudflare-2026-09-18]
+    paths:
+      - ".image-parts/home.b64"
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode image
+        run: |
+          mkdir -p miniapp/assets
+          base64 -d .image-parts/home.b64 > miniapp/assets/home.jpg
+          file miniapp/assets/home.jpg
+      - name: Commit image and cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f miniapp/assets/home.jpg
+          git rm .image-parts/home.b64
+          git rm .github/workflows/materialize-home-image.yml
+          git commit -m "Add uploaded home image"
+          git push
