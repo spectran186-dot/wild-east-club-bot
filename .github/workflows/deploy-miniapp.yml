@@ -154,6 +154,20 @@ jobs:
           printf '%s' "$BOT_TOKEN" | wrangler secret put BOT_TOKEN
 
 
+      - name: Configure GitHub repository token secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GITHUB_TOKEN_SECRET: ${{ secrets.GH_REPO_TOKEN }}
+        run: |
+          set -e
+          if [ -z "$GITHUB_TOKEN_SECRET" ]; then
+            echo "GitHub secret GH_REPO_TOKEN is not configured."
+            echo "Create a repository secret named GH_REPO_TOKEN containing a fine-grained GitHub token with Contents: Read and write for this repository."
+            exit 1
+          fi
+          printf "%s" "$GITHUB_TOKEN_SECRET" | wrangler secret put GITHUB_TOKEN
+
       - name: Deploy Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
