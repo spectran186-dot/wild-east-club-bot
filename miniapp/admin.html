@@ -17,7 +17,7 @@ function permName(p){return ({bookings:"Заявки",events:"Мероприят
 function permChecks(selected=[]){return ["bookings","events","reports","media","admins"].map(p=>'<label style="display:flex;align-items:center;gap:8px;margin:7px 0;font-weight:600"><input type="checkbox" name="perm" value="'+p+'" '+(selected.includes(p)?"checked":"")+'> '+permName(p)+'</label>').join("")}
 async function uploadMedia(kind,routeId,file){
 if(!file)return;
-if(!/^image\\/(jpeg|png|webp|avif)$/.test(file.type))return alert("Разрешены JPG, PNG, WEBP, AVIF");
+if(!/^image\/(jpeg|png|webp|avif)$/.test(file.type))return alert("Разрешены JPG, PNG, WEBP, AVIF");
 if(file.size>12*1024*1024)return alert("Файл больше 12 МБ");
 try{
  const r=await fetch("/api/admin/media?kind="+encodeURIComponent(kind)+(routeId?"&route_id="+routeId:""),{method:"POST",body:file,headers:{"Content-Type":file.type,"X-Telegram-Init-Data":initData}});
