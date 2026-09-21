@@ -15,7 +15,56 @@ async function sendBooking(){try{const d=await api("/bookings",{method:"POST",bo
  S.page="admin";function adminHome(){let h='<div class="card"><div class="title">👨‍💼 Административная панель</div><div class="menu-stack">';if(S.permissions.includes("bookings"))h+='<button class="btn" onclick="bookings()">📋 Заявки</button><button class="btn" onclick="manualMenu()">➕ Внести заявку</button>';if(S.permissions.includes("reports"))h+='<button class="btn" onclick="reports()">📊 Отчёты</button>';if(S.permissions.includes("events"))h+='<button class="btn" onclick="manageEvents()">📅 Мероприятия</button>';if(S.permissions.includes("admins"))h+='<button class="btn primary" onclick="settings()">⚙️ Настройки</button>';h+='</div></div>';app.innerHTML=h}
 function permName(p){return ({bookings:"Заявки",events:"Мероприятия",reports:"Отчёты",media:"Изображения",admins:"Администраторы"})[p]||p}
 function permChecks(selected=[]){return ["bookings","events","reports","media","admins"].map(p=>'<label style="display:flex;align-items:center;gap:8px;margin:7px 0;font-weight:600"><input type="checkbox" name="perm" value="'+p+'" '+(selected.includes(p)?"checked":"")+'> '+permName(p)+'</label>').join("")}
-async function settings(){try{const d=await api("/admin/settings");S.settings=d;S.routes=d.routes||[];S.permissions=d.permissions||[];let h='<div class="card"><div class="title">⚙️ Настройки</div><p class="muted">Управление администраторами и правами доступа.</p></div>';if(S.permissions.includes("admins")){h+='<div class="card"><div class="title">👥 Администраторы</div><button class="btn primary" onclick="adminForm()">➕ Добавить администратора</button>';for(const x of (d.admins||[])){const owner=x.role==="owner";h+='<div class="participant"><b>👤 Telegram ID: '+esc(x.telegram_id)+'</b><br>Роль: <b>'+esc(x.role)+'</b><br><span class="muted">Права: '+(x.permissions||[]).map(permName).join(", ")+'</span>';if(!owner)h+='<div class="compact-actions"><button class="btn" onclick="adminForm('+x.telegram_id+')">✏️ Изменить</button><button class="btn danger" onclick="removeAdmin('+x.telegram_id+')">🗑 Удалить</button></div>';else h+='<div class="muted small">Основной администратор — права задаются конфигурацией приложения.</div>';h+='</div>'}h+='</div>'}h+='<button class="btn" onclick="back()">⬅️ Админ-панель</button>';app.innerHTML=h}catch(e){app.innerHTML='<div class="card error">⚠️ '+esc(e.message)+'</div><button class="btn" onclick="back()">⬅️ Админ-панель</button>'}}
+async function uploadMedia(kind,routeId,file){
+if(!file)return;
+if(!/^image\\/(jpeg|png|webp|avif)$/.test(file.type))return alert("Разрешены JPG, PNG, WEBP, AVIF");
+if(file.size>12*1024*1024)return alert("Файл больше 12 МБ");
+try{
+ const r=await fetch("/api/admin/media?kind="+encodeURIComponent(kind)+(routeId?"&route_id="+routeId:""),{method:"POST",body:file,headers:{"Content-Type":file.type,"X-Telegram-Init-Data":initData}});
+ const d=await r.json().catch(()=>({error:"Ошибка ответа"}));
+ if(!r.ok)throw Error(d.error||("HTTP "+r.status));
+ settings();
+}catch(e){alert(e.message)}
+}
+async function deleteMedia(kind,routeId){
+if(!confirm("Удалить изображение?"))return;
+try{await api("/admin/media",{method:"DELETE",body:JSON.stringify({kind:kind,route_id:routeId||0})});settings()}catch(e){alert(e.message)}
+}
+async function settings(){
+try{
+ const d=await api("/admin/settings");S.settings=d;S.routes=d.routes||[];S.permissions=d.permissions||[];
+ let h='<div class="card"><div class="title">⚙️ Настройки</div><p class="muted">Администраторы, права и изображения приложения.</p></div>';
+ if(S.permissions.includes("media")){
+   h+='<div class="card"><div class="title">🏠 Главное изображение</div>';
+   if(d.home_image_url)h+='<img src="'+d.home_image_url+'" style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:14px;margin:8px 0">';
+   h+='<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onchange="uploadMedia(\'home\',0,this.files[0])">';
+   if(d.home_image_url)h+='<button class="btn danger" onclick="deleteMedia(\'home\',0)">🗑 Удалить</button>';
+   h+='</div>';
+   h+='<div class="card"><div class="title">🖼 Фото карточек маршрутов</div><p class="muted small">Рекомендуемый формат — горизонтальный 2:1. JPG/PNG/WEBP до 12 МБ.</p>';
+   for(const r of S.routes){
+     h+='<div class="participant"><b>'+esc(r.title)+'</b>';
+     if(r.image_url)h+='<img src="'+r.image_url+'" style="width:100%;aspect-ratio:2/1;object-fit:cover;border-radius:12px;margin:8px 0">';
+     else h+='<div class="muted small" style="margin:8px 0">Используется шаблонное изображение</div>';
+     h+='<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onchange="uploadMedia(\'route\','+r.id+',this.files[0])">';
+     if(r.image_url)h+='<button class="btn danger" onclick="deleteMedia(\'route\','+r.id+')">🗑 Удалить фото</button>';
+     h+='</div>';
+   }
+   h+='</div>';
+ }
+ if(S.permissions.includes("admins")){
+   h+='<div class="card"><div class="title">👥 Администраторы</div><button class="btn primary" onclick="adminForm()">➕ Добавить администратора</button>';
+   for(const x of (d.admins||[])){
+     const owner=x.role==="owner";
+     h+='<div class="participant"><b>👤 Telegram ID: '+esc(x.telegram_id)+'</b><br>Роль: <b>'+esc(x.role)+'</b><br><span class="muted">Права: '+(x.permissions||[]).map(permName).join(", ")+'</span>';
+     if(!owner)h+='<div class="compact-actions"><button class="btn" onclick="adminForm('+x.telegram_id+')">✏️ Изменить</button><button class="btn danger" onclick="removeAdmin('+x.telegram_id+')">🗑 Удалить</button></div>';
+     else h+='<div class="muted small">Основной администратор защищён.</div>';
+     h+='</div>';
+   }
+   h+='</div>';
+ }
+ h+='<button class="btn" onclick="back()">⬅️ Админ-панель</button>';app.innerHTML=h;
+}catch(e){app.innerHTML='<div class="card error">⚠️ '+esc(e.message)+'</div><button class="btn" onclick="back()">⬅️ Админ-панель</button>'}
+}
 function adminForm(id){const x=(S.settings?.admins||[]).find(a=>Number(a.telegram_id)===Number(id));const selected=x?.permissions||["bookings","events","reports"];app.innerHTML='<div class="card"><div class="title">'+(x?"✏️ Изменить администратора":"➕ Добавить администратора")+'</div><label>Telegram ID<input id="aid" inputmode="numeric" value="'+esc(x?.telegram_id||"")+'" '+(x?"readonly":"")+'></label><label>Роль<select id="arole"><option value="manager" '+(x?.role==="manager"?"selected":"")+'>Менеджер</option><option value="content" '+(x?.role==="content"?"selected":"")+'>Контент</option><option value="viewer" '+(x?.role==="viewer"?"selected":"")+'>Наблюдатель</option></select></label><div class="field-title">Права доступа</div>'+permChecks(selected)+'<button class="btn primary" onclick="saveAdmin('+(x?x.telegram_id:"0")+')">💾 Сохранить</button><button class="btn" onclick="settings()">⬅️ Настройки</button></div>'}
 async function saveAdmin(existingId){try{const permissions=[...document.querySelectorAll('input[name="perm"]:checked')].map(x=>x.value),payload={telegram_id:Number(aid.value),role:arole.value,permissions};await api(existingId?"/admin/admins/"+existingId:"/admin/admins",{method:existingId?"PUT":"POST",body:JSON.stringify(payload)});settings()}catch(e){alert(e.message)}}
 async function removeAdmin(id){if(!confirm("Удалить администратора?"))return;try{await api("/admin/admins/"+id,{method:"DELETE"});settings()}catch(e){alert(e.message)}}
