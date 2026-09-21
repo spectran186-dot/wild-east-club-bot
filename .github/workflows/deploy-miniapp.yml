@@ -114,7 +114,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -e
-          npx wrangler r2 bucket create wild-east-club-media --location auto || true
+          npx wrangler r2 bucket create wild-east-club-media || true
 
       - name: Apply settings and media migrations
         env:
