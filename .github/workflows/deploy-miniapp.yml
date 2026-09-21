@@ -108,7 +108,7 @@ jobs:
           PY
           echo "JavaScript syntax (tourist + admin): OK"
 
-      - name: Apply settings and media migrations
+      - name: Apply settings migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -153,23 +153,6 @@ jobs:
           fi
           printf '%s' "$BOT_TOKEN" | wrangler secret put BOT_TOKEN
 
-      - name: Ensure R2 media bucket
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -euo pipefail
-          BUCKET="wild-east-club-media"
-          echo "Checking R2 bucket: $BUCKET"
-          if npx wrangler r2 bucket list | grep -Fq "$BUCKET"; then
-            echo "R2 bucket already exists: $BUCKET"
-          else
-            echo "R2 bucket not found. Creating: $BUCKET"
-            npx wrangler r2 bucket create "$BUCKET"
-            echo "R2 bucket created: $BUCKET"
-          fi
-          echo "### 🗄️ R2 media bucket ready" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Bucket:** $BUCKET" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy Worker
         env:
