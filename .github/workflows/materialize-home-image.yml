@@ -3,8 +3,6 @@ name: Materialize uploaded home image
 on:
   push:
     branches: [feature/mini-app-cloudflare-2026-09-18]
-    paths:
-      - ".image-parts/home.b64"
 
 permissions:
   contents: write
