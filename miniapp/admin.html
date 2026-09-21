@@ -18,7 +18,7 @@ function permChecks(selected=[]){return ["bookings","events","reports","media","
 async function uploadMedia(kind,routeId,file){
 if(!file)return;
 if(!/^image\/(jpeg|png|webp|avif)$/.test(file.type))return alert("Разрешены JPG, PNG, WEBP, AVIF");
-if(file.size>12*1024*1024)return alert("Файл больше 12 МБ");
+if(file.size>6*1024*1024)return alert("Файл больше 6 МБ");
 try{
  const r=await fetch("/api/admin/media?kind="+encodeURIComponent(kind)+(routeId?"&route_id="+routeId:""),{method:"POST",body:file,headers:{"Content-Type":file.type,"X-Telegram-Init-Data":initData}});
  const d=await r.json().catch(()=>({error:"Ошибка ответа"}));
