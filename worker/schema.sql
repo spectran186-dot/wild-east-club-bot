@@ -6,3 +6,5 @@ CREATE INDEX IF NOT EXISTS idx_events_status_date ON events(status,event_date,ev
 CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_duplicate ON bookings(event_id,full_name,phone);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_active_person ON bookings(event_id,lower(trim(full_name)),phone) WHERE status NOT IN ('cancelled','canceled');
+CREATE TABLE IF NOT EXISTS event_templates (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,route_id INTEGER NOT NULL,event_time TEXT NOT NULL,price INTEGER NOT NULL,max_places INTEGER DEFAULT 30,meeting_point TEXT,status TEXT DEFAULT 'active',FOREIGN KEY(route_id) REFERENCES routes(id));
+CREATE INDEX IF NOT EXISTS idx_event_templates_status ON event_templates(status);
