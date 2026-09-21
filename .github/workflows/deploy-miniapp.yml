@@ -108,6 +108,25 @@ jobs:
           PY
           echo "JavaScript syntax (tourist + admin): OK"
 
+      - name: Ensure R2 media bucket
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -e
+          npx wrangler r2 bucket create wild-east-club-media --location auto || true
+
+      - name: Apply settings and media migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set +e
+          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE admins ADD COLUMN permissions TEXT DEFAULT '';"
+          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE routes ADD COLUMN image_key TEXT;"
+          set -e
+          npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);"
+
       - name: Verify Wrangler
         run: wrangler --version
 
