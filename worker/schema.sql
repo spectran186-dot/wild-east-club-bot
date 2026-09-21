@@ -1,10 +1,12 @@
-CREATE TABLE IF NOT EXISTS routes (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,type TEXT DEFAULT 'sup',start_point TEXT,finish_point TEXT,description TEXT,duration TEXT,default_price INTEGER DEFAULT 0,status TEXT DEFAULT 'active');
+CREATE TABLE IF NOT EXISTS routes (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,type TEXT DEFAULT 'sup',start_point TEXT,finish_point TEXT,description TEXT,duration TEXT,default_price INTEGER DEFAULT 0,image_key TEXT,status TEXT DEFAULT 'active');
 CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT,route_id INTEGER,event_date TEXT NOT NULL,event_time TEXT NOT NULL,price INTEGER NOT NULL,max_places INTEGER DEFAULT 30,free_places INTEGER DEFAULT 30,meeting_point TEXT,status TEXT DEFAULT 'active',FOREIGN KEY(route_id) REFERENCES routes(id));
 CREATE TABLE IF NOT EXISTS bookings (id INTEGER PRIMARY KEY AUTOINCREMENT,event_id INTEGER,telegram_id INTEGER,full_name TEXT NOT NULL,phone TEXT NOT NULL,adults INTEGER DEFAULT 1,children INTEGER DEFAULT 0,own_sup INTEGER DEFAULT 0,source TEXT,status TEXT DEFAULT 'new',comment TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(event_id) REFERENCES events(id));
-CREATE TABLE IF NOT EXISTS admins (telegram_id INTEGER PRIMARY KEY,role TEXT DEFAULT 'admin');
+CREATE TABLE IF NOT EXISTS admins (telegram_id INTEGER PRIMARY KEY,role TEXT DEFAULT 'admin',permissions TEXT DEFAULT '');
 CREATE INDEX IF NOT EXISTS idx_events_status_date ON events(status,event_date,event_time);
 CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_duplicate ON bookings(event_id,full_name,phone);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_active_person ON bookings(event_id,lower(trim(full_name)),phone) WHERE status NOT IN ('cancelled','canceled');
 CREATE TABLE IF NOT EXISTS event_templates (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,route_id INTEGER NOT NULL,event_time TEXT NOT NULL,price INTEGER NOT NULL,max_places INTEGER DEFAULT 30,meeting_point TEXT,status TEXT DEFAULT 'active',FOREIGN KEY(route_id) REFERENCES routes(id));
 CREATE INDEX IF NOT EXISTS idx_event_templates_status ON event_templates(status);
+CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_routes_image ON routes(image_key);
