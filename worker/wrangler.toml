@@ -18,4 +18,3 @@ ADMIN_IDS = "323262204,462776734"
 
 [[r2_buckets]]
 binding = "MEDIA"
-bucket_name = "wild-east-club-media"
