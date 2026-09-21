@@ -60,7 +60,8 @@ jobs:
           home = ImageEnhance.Color(home).enhance(1.04)
           home = ImageEnhance.Sharpness(home).enhance(1.7)
           home = home.filter(ImageFilter.UnsharpMask(radius=1.2, percent=120, threshold=3))
-          home.save(out/"home.jpg", quality=92, optimize=True, progressive=True)
+          if not (out/"home.jpg").exists():
+              home.save(out/"home.jpg", quality=92, optimize=True, progressive=True)
           w, h = src.size
           crops = {
               "event-1.jpg": (0, int(h*0.14), w, int(h*0.78)),
@@ -74,8 +75,9 @@ jobs:
               im = ImageEnhance.Color(im).enhance(1.05)
               im = ImageEnhance.Sharpness(im).enhance(1.8)
               im = im.filter(ImageFilter.UnsharpMask(radius=1.0, percent=130, threshold=3))
-              im.save(out/name, quality=88, optimize=True, progressive=True)
-          print("Optimized home image and 4 unique event previews prepared.")
+              if not (out/name).exists():
+                  im.save(out/name, quality=88, optimize=True, progressive=True)
+          print("Default images prepared only when files are missing; uploaded GitHub images are preserved.")
           PY
 
       - name: Static syntax validation
