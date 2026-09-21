@@ -161,8 +161,7 @@ jobs:
           set -euo pipefail
           BUCKET="wild-east-club-media"
           echo "Checking R2 bucket: $BUCKET"
-          BUCKETS="$(npx wrangler r2 bucket list --json)"
-          if echo "$BUCKETS" | python -c 'import json,sys; data=json.load(sys.stdin); print(any(x.get("name") == "wild-east-club-media" for x in data))' | grep -q true; then
+          if npx wrangler r2 bucket list | grep -Fq "$BUCKET"; then
             echo "R2 bucket already exists: $BUCKET"
           else
             echo "R2 bucket not found. Creating: $BUCKET"
