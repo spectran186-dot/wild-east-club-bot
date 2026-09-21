@@ -182,8 +182,11 @@ jobs:
             RESPONSE=$(curl -sS -X POST "https://api.telegram.org/bot$BOT_TOKEN/setWebhook" -H "Content-Type: application/json" --data-raw "{\"url\":\"$WORKER_URL/telegram/webhook\",\"secret_token\":\"$SECRET\",\"drop_pending_updates\":true}")
             echo "$RESPONSE"
             if echo "$RESPONSE" | grep -q '"ok":true'; then break; fi
-            if echo "$RESPONSE" | grep -q '"error_code":429'; then sleep 2; else exit 1; fi
-            if [ "$attempt" = "5" ]; then exit 1; fi
+            if echo "$RESPONSE" | grep -q '"error_code":429'; then sleep 2; elif echo "$RESPONSE" | grep -q 'Failed to resolve host'; then sleep 5; else exit 1; fi
+            if [ "$attempt" = "5" ]; then
+              echo "Telegram webhook configuration failed after retries."
+              exit 1
+            fi
           done
           echo "### ✅ Telegram webhook configured" >> "$GITHUB_STEP_SUMMARY"
           echo "**Webhook:** $WORKER_URL/telegram/webhook" >> "$GITHUB_STEP_SUMMARY"
