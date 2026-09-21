@@ -40,7 +40,7 @@ try{
    h+='<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onchange="uploadMedia(\'home\',0,this.files[0])">';
    if(d.home_image_url)h+='<button class="btn danger" onclick="deleteMedia(\'home\',0)">🗑 Удалить</button>';
    h+='</div>';
-   h+='<div class="card"><div class="title">🖼 Фото карточек маршрутов</div><p class="muted small">Рекомендуемый формат — горизонтальный 2:1. JPG/PNG/WEBP до 12 МБ.</p>';
+   h+='<div class="card"><div class="title">🖼 Фото карточек маршрутов</div><p class="muted small">Рекомендуемый формат — горизонтальный 2:1. JPG/PNG/WEBP/AVIF до 6 МБ.</p>';
    for(const r of S.routes){
      h+='<div class="participant"><b>'+esc(r.title)+'</b>';
      if(r.image_url)h+='<img src="'+r.image_url+'" style="width:100%;aspect-ratio:2/1;object-fit:cover;border-radius:12px;margin:8px 0">';
