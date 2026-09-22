@@ -55,7 +55,7 @@ jobs:
               import subprocess,re
               out=subprocess.check_output(["wrangler","d1","create","wild-east-club","--location=weur"],text=True)
               print(out)
-              m=re.search(r'database_id\\s*=\\s*"([^"]+)"',out)
+              m=re.search(r'database_id\s*=\s*"([^"]+)"']+)"',out)
               if not m: raise SystemExit("Could not determine D1 database ID")
               dbid=m.group(1)
           print("Using D1:",dbid)
@@ -71,7 +71,7 @@ jobs:
           p=Path("worker/wrangler.toml")
           s=p.read_text()
           dbid=os.environ["DB_ID"]
-          s=re.sub(r'database_id\\s*=\\s*"[^"]+"', f'database_id = "{dbid}"', s)
+          s=re.sub(r'database_id\s*=\s*"([^"]+)"']+"', f'database_id = "{dbid}"', s)
           p.write_text(s)
           PY
 
