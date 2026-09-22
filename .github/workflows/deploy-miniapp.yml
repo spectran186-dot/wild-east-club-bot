@@ -1,9 +1,9 @@
 name: Deploy Wild East Club Mini App
 
 on:
-  workflow_run:
-    workflows: ["Provision Wild East Club D1"]
-    types: [completed]
+  push:
+    branches:
+      - feature/mini-app-cloudflare-2026-09-18
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'feature/mini-app-cloudflare-2026-09-18') }}
     runs-on: ubuntu-latest
     defaults:
       run:
