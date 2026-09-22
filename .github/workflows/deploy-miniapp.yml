@@ -130,6 +130,7 @@ jobs:
           npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);"
           npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE events ADD COLUMN template_id INTEGER;" || true
           npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE events ADD COLUMN image_key TEXT;" || true
+          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE events ADD COLUMN type TEXT DEFAULT 'sup';" || true
           HAS_ROUTE=$(npx wrangler d1 execute wild-east-club --remote --command="PRAGMA table_info(event_templates);" 2>/dev/null | grep -c 'route_id' || true)
           if [ "$HAS_ROUTE" -gt 0 ]; then
             npx wrangler d1 execute wild-east-club --remote --command="DROP TABLE IF EXISTS event_templates_new;"
