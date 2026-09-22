@@ -45,7 +45,7 @@ jobs:
           import re, subprocess, tempfile
           for page in (Path("../miniapp/index.html"), Path("../miniapp/admin.html")):
               html = page.read_text(encoding="utf-8")
-              scripts = re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", html, re.S | re.I)
+              scripts = re.findall(r"<script[^>]*>(.*?)</script>", html, re.S | re.I)
               inline = [s for s in scripts if s.strip()]
               if not inline:
                   raise SystemExit(f"No inline JavaScript found in {page}")
@@ -84,8 +84,11 @@ jobs:
         run: |
           set -euo pipefail
           wrangler deploy 2>&1 | tee deploy.log
-          URL=$(grep -oE 'https://[A-Za-z0-9._-]+\\.workers\\.dev' deploy.log | head -n 1 || true)
-          test -n "$URL"
+          URL=$(grep -oE 'https://[A-Za-z0-9._-]+\.workers\.dev' deploy.log | head -n 1 || true)
+          if [ -z "$URL" ]; then
+            echo "Could not determine workers.dev URL from Wrangler output."
+            exit 1
+          fi
           echo "WORKER_URL=$URL" >> "$GITHUB_ENV"
           {
             echo "### 🚀 Worker deployed"
@@ -111,12 +114,19 @@ jobs:
           WORKER_URL: ${{ env.WORKER_URL }}
         run: |
           set -e
-          INFO=$(curl -fsS "https://api.telegram.org/bot$BOT_TOKEN/getWebhookInfo")
-          echo "$INFO"
-          echo "$INFO" | grep -q '"ok":true'
-          EXPECTED="$WORKER_URL/telegram/webhook"
-          ACTUAL=$(printf '%s' "$INFO" | sed -n 's/.*"url":"\\([^"]*\\)".*/\\1/p')
-          test "$ACTUAL" = "$EXPECTED"
+          python - <<'PY'
+          import json, os, urllib.request
+          token=os.environ["BOT_TOKEN"]
+          with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/getWebhookInfo") as r:
+              data=json.load(r)
+          print(data)
+          if not data.get("ok"):
+              raise SystemExit("Telegram getWebhookInfo failed")
+          expected=os.environ["WORKER_URL"]+"/telegram/webhook"
+          actual=data.get("result",{}).get("url","")
+          if actual != expected:
+              raise SystemExit(f"Webhook mismatch: {actual} != {expected}")
+          PY
 
       - name: Verify live API
         env:
