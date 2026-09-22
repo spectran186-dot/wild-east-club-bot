@@ -1,9 +1,6 @@
 name: Provision Wild East Club D1
 
 on:
-  push:
-    branches:
-      - feature/mini-app-cloudflare-2026-09-18
   workflow_dispatch:
 
 permissions:
@@ -15,7 +12,6 @@ concurrency:
 
 jobs:
   provision:
-    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, 'Configure Cloudflare D1 database') }}
     runs-on: ubuntu-latest
 
     steps:
