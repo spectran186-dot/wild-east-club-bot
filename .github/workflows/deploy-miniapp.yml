@@ -121,6 +121,25 @@ jobs:
           set -e
           npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);"
 
+      - name: Migrate event templates and event image fields
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -e
+          npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE IF NOT EXISTS route_templates (route_id INTEGER NOT NULL,template_id INTEGER NOT NULL,PRIMARY KEY(route_id,template_id));"
+          npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);"
+          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE events ADD COLUMN template_id INTEGER;" || true
+          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE events ADD COLUMN image_key TEXT;" || true
+          HAS_ROUTE=$(npx wrangler d1 execute wild-east-club --remote --command="PRAGMA table_info(event_templates);" 2>/dev/null | grep -c 'route_id' || true)
+          if [ "$HAS_ROUTE" -gt 0 ]; then
+            npx wrangler d1 execute wild-east-club --remote --command="INSERT OR IGNORE INTO route_templates(route_id,template_id) SELECT route_id,id FROM event_templates WHERE route_id IS NOT NULL;"
+            npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE event_templates_new (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,event_time TEXT NOT NULL,price INTEGER NOT NULL,max_places INTEGER DEFAULT 30,meeting_point TEXT,status TEXT DEFAULT 'active');"
+            npx wrangler d1 execute wild-east-club --remote --command="INSERT INTO event_templates_new(id,name,event_time,price,max_places,meeting_point,status) SELECT id,name,event_time,price,max_places,meeting_point,status FROM event_templates;"
+            npx wrangler d1 execute wild-east-club --remote --command="DROP TABLE event_templates;"
+            npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE event_templates_new RENAME TO event_templates;"
+            npx wrangler d1 execute wild-east-club --remote --command="CREATE INDEX IF NOT EXISTS idx_event_templates_status ON event_templates(status);"
+          fi
       - name: Verify Wrangler
         run: wrangler --version
 
