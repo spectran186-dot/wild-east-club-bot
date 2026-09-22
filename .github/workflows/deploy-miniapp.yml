@@ -1,9 +1,6 @@
 name: Deploy Wild East Club Mini App
 
 on:
-  push:
-    branches:
-      - feature/mini-app-cloudflare-2026-09-18
   workflow_run:
     workflows: ["Provision Wild East Club D1"]
     types: [completed]
@@ -12,21 +9,24 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: wild-east-club-deploy
+  cancel-in-progress: true
+
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'feature/mini-app-cloudflare-2026-09-18') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'feature/mini-app-cloudflare-2026-09-18') }}
     runs-on: ubuntu-latest
-
     defaults:
       run:
         working-directory: worker
 
     steps:
-      - name: Checkout Mini App branch
+      - name: Checkout production Mini App branch
         uses: actions/checkout@v4
         with:
           ref: feature/mini-app-cloudflare-2026-09-18
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -36,143 +36,36 @@ jobs:
       - name: Install Wrangler
         run: npm install --global wrangler@latest
 
-      - name: Prepare optimized Mini App images
-        run: |
-          set -e
-          pip install --disable-pip-version-check -q pillow
-          python - <<'PY'
-          import base64, re
-          from io import BytesIO
-          from pathlib import Path
-          from PIL import Image, ImageEnhance, ImageFilter
-          import subprocess
-          source_html = subprocess.check_output([
-              "git", "show", "58a27958e9c6a8e1e0449546db5afb7a92a47221:miniapp/index.html"
-          ], text=True)
-          m = re.search(r'data:image/jpeg;base64,([^"]+)', source_html)
-          if not m:
-              raise SystemExit("Original source image was not found in the reference commit.")
-          src = Image.open(BytesIO(base64.b64decode(m.group(1)))).convert("RGB")
-          out = Path("../miniapp/assets")
-          out.mkdir(parents=True, exist_ok=True)
-          home = src.resize((src.width*2, src.height*2), Image.Resampling.LANCZOS)
-          home = ImageEnhance.Contrast(home).enhance(1.05)
-          home = ImageEnhance.Color(home).enhance(1.04)
-          home = ImageEnhance.Sharpness(home).enhance(1.7)
-          home = home.filter(ImageFilter.UnsharpMask(radius=1.2, percent=120, threshold=3))
-          if not (out/"home.jpg").exists():
-              home.save(out/"home.jpg", quality=92, optimize=True, progressive=True)
-          w, h = src.size
-          crops = {
-              "event-1.jpg": (0, int(h*0.14), w, int(h*0.78)),
-              "event-2.jpg": (int(w*0.35), int(h*0.12), w, int(h*0.64)),
-              "event-3.jpg": (0, int(h*0.42), w, int(h*0.88)),
-              "event-4.jpg": (int(w*0.40), 0, w, int(h*0.62)),
-          }
-          for name, box in crops.items():
-              im = src.crop(box).resize((1000,620), Image.Resampling.LANCZOS)
-              im = ImageEnhance.Contrast(im).enhance(1.06)
-              im = ImageEnhance.Color(im).enhance(1.05)
-              im = ImageEnhance.Sharpness(im).enhance(1.8)
-              im = im.filter(ImageFilter.UnsharpMask(radius=1.0, percent=130, threshold=3))
-              if not (out/name).exists():
-                  im.save(out/name, quality=88, optimize=True, progressive=True)
-          print("Default images prepared only when files are missing; uploaded GitHub images are preserved.")
-          PY
-
-      - name: Static syntax validation
+      - name: Validate Worker and Mini App
         run: |
           set -e
           node --check src/index.js
           python - <<'PY'
           from pathlib import Path
-          pages = ["../miniapp/index.html", "../miniapp/admin.html"]
-          for i, page in enumerate(pages):
-              html = Path(page).read_text(encoding="utf-8")
-              marker = "<script>"
-              end = "</script>"
-              if marker not in html or end not in html:
+          import re, subprocess, tempfile
+          for page in (Path("../miniapp/index.html"), Path("../miniapp/admin.html")):
+              html = page.read_text(encoding="utf-8")
+              scripts = re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", html, re.S | re.I)
+              inline = [s for s in scripts if s.strip()]
+              if not inline:
                   raise SystemExit(f"No inline JavaScript found in {page}")
-              scripts = []
-              rest = html
-              while marker in rest and end in rest:
-                  rest = rest.split(marker, 1)[1]
-                  script, rest = rest.split(end, 1)
-                  scripts.append(script)
-              if not any(s.strip() for s in scripts):
-                  raise SystemExit(f"No inline JavaScript found in {page}")
-              out = Path(f"/tmp/miniapp-{i}.js")
-              out.write_text("\n".join(scripts), encoding="utf-8")
-              print(f"Validating {page}")
-              import subprocess
-              subprocess.run(["node", "--check", str(out)], check=True)
-          print("JavaScript syntax (tourist + admin): OK")
+              for i, script in enumerate(inline):
+                  p = Path(tempfile.gettempdir()) / f"wild-east-{page.stem}-{i}.js"
+                  p.write_text(script, encoding="utf-8")
+                  subprocess.run(["node", "--check", str(p)], check=True)
+              print(f"{page}: JavaScript syntax OK")
           PY
-          echo "JavaScript syntax (tourist + admin): OK"
 
-      - name: Apply settings migrations
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set +e
-          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE admins ADD COLUMN permissions TEXT DEFAULT '';"
-          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE routes ADD COLUMN image_key TEXT;"
-          set -e
-          npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);"
-
-      - name: Migrate event templates and event image fields
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Verify D1 configuration
         run: |
           set -e
-          npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);"
-          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE events ADD COLUMN template_id INTEGER;" || true
-          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE events ADD COLUMN image_key TEXT;" || true
-          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE events ADD COLUMN type TEXT DEFAULT 'sup';" || true
-          HAS_ROUTE=$(npx wrangler d1 execute wild-east-club --remote --command="PRAGMA table_info(event_templates);" 2>/dev/null | grep -c 'route_id' || true)
-          if [ "$HAS_ROUTE" -gt 0 ]; then
-            npx wrangler d1 execute wild-east-club --remote --command="DROP TABLE IF EXISTS event_templates_new;"
-            npx wrangler d1 execute wild-east-club --remote --command="DROP TABLE IF EXISTS route_templates_backup;"
-            npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE route_templates_backup (route_id INTEGER NOT NULL,template_id INTEGER NOT NULL,PRIMARY KEY(route_id,template_id));"
-            npx wrangler d1 execute wild-east-club --remote --command="INSERT OR IGNORE INTO route_templates_backup(route_id,template_id) SELECT route_id,template_id FROM route_templates;" || true
-            npx wrangler d1 execute wild-east-club --remote --command="INSERT OR IGNORE INTO route_templates_backup(route_id,template_id) SELECT route_id,id FROM event_templates WHERE route_id IS NOT NULL;"
-            npx wrangler d1 execute wild-east-club --remote --command="DROP TABLE IF EXISTS route_templates;"
-            npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE event_templates_new (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,event_time TEXT NOT NULL,price INTEGER NOT NULL,max_places INTEGER DEFAULT 30,meeting_point TEXT,status TEXT DEFAULT 'active');"
-            npx wrangler d1 execute wild-east-club --remote --command="INSERT INTO event_templates_new(id,name,event_time,price,max_places,meeting_point,status) SELECT id,name,event_time,price,max_places,meeting_point,status FROM event_templates;"
-            npx wrangler d1 execute wild-east-club --remote --command="DROP TABLE event_templates;"
-            npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE event_templates_new RENAME TO event_templates;"
-            npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE route_templates (route_id INTEGER NOT NULL,template_id INTEGER NOT NULL,PRIMARY KEY(route_id,template_id),FOREIGN KEY(route_id) REFERENCES routes(id),FOREIGN KEY(template_id) REFERENCES event_templates(id));"
-            npx wrangler d1 execute wild-east-club --remote --command="INSERT OR IGNORE INTO route_templates(route_id,template_id) SELECT route_id,template_id FROM route_templates_backup;"
-            npx wrangler d1 execute wild-east-club --remote --command="DROP TABLE route_templates_backup;"
-            npx wrangler d1 execute wild-east-club --remote --command="CREATE INDEX IF NOT EXISTS idx_event_templates_status ON event_templates(status);"
-            npx wrangler d1 execute wild-east-club --remote --command="CREATE INDEX IF NOT EXISTS idx_route_templates_route ON route_templates(route_id);"
-            npx wrangler d1 execute wild-east-club --remote --command="CREATE INDEX IF NOT EXISTS idx_route_templates_template ON route_templates(template_id);"
-          else
-            npx wrangler d1 execute wild-east-club --remote --command="CREATE TABLE IF NOT EXISTS route_templates (route_id INTEGER NOT NULL,template_id INTEGER NOT NULL,PRIMARY KEY(route_id,template_id),FOREIGN KEY(route_id) REFERENCES routes(id),FOREIGN KEY(template_id) REFERENCES event_templates(id));"
-          fi
-      - name: Verify Wrangler
-        run: wrangler --version
-
-      - name: Validate D1 binding
-        run: |
+          test -f wrangler.toml
+          grep -Eq '^database_id[[:space:]]*=[[:space:]]*"[^"]+"' wrangler.toml
           if grep -q 'REPLACE_WITH_D1_DATABASE_ID' wrangler.toml; then
             echo "D1 database_id is still a placeholder."
             exit 1
           fi
-
-      - name: Ensure route type column
-        run: |
-          set +e
-          npx wrangler d1 execute wild-east-club --remote --command="ALTER TABLE routes ADD COLUMN type TEXT DEFAULT 'sup';"
-          status=$?
-          set -e
-          if [ "$status" -ne 0 ]; then echo "Route type column already exists or migration was not applicable; continuing."; fi
-
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          echo "Wrangler configuration OK"
 
       - name: Configure Telegram bot secret
         env:
@@ -180,113 +73,72 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         run: |
-          if [ -z "$BOT_TOKEN" ]; then
-            echo "GitHub secret BOT_TOKEN is not configured."
-            exit 1
-          fi
-          printf '%s' "$BOT_TOKEN" | wrangler secret put BOT_TOKEN
-
-
-      - name: Configure GitHub repository token secret
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          GITHUB_TOKEN_SECRET: ${{ secrets.GH_REPO_TOKEN }}
-        run: |
           set -e
-          if [ -z "$GITHUB_TOKEN_SECRET" ]; then
-            echo "GitHub secret GH_REPO_TOKEN is not configured."
-            echo "Create a repository secret named GH_REPO_TOKEN containing a fine-grained GitHub token with Contents: Read and write for this repository."
-            exit 1
-          fi
-          printf "%s" "$GITHUB_TOKEN_SECRET" | wrangler secret put GITHUB_TOKEN
+          test -n "$BOT_TOKEN"
+          printf '%s' "$BOT_TOKEN" | wrangler secret put BOT_TOKEN
 
       - name: Deploy Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          set -o pipefail
+          set -euo pipefail
           wrangler deploy 2>&1 | tee deploy.log
-          URL=$(grep -oE 'https://[A-Za-z0-9._-]+\.workers\.dev' deploy.log | head -n 1)
-          if [ -z "$URL" ]; then
-            echo "Worker deployed, but workers.dev URL was not found in Wrangler output."
-            exit 1
-          fi
+          URL=$(grep -oE 'https://[A-Za-z0-9._-]+\\.workers\\.dev' deploy.log | head -n 1 || true)
+          test -n "$URL"
           echo "WORKER_URL=$URL" >> "$GITHUB_ENV"
-          echo "### 🚀 Worker deployed" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Worker URL:** $URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "**API test:** $URL/api/events" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### 🚀 Worker deployed"
+            echo ""
+            echo "**Worker:** $URL"
+            echo "**API:** $URL/api/events"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Configure Telegram webhook
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           WORKER_URL: ${{ env.WORKER_URL }}
         run: |
-          SECRET=$(printf '%s' "$BOT_TOKEN" | openssl dgst -sha256 -hmac "webhook-secret" -binary | xxd -p -c 256)
-          for attempt in 1 2 3 4 5; do
-            RESPONSE=$(curl -sS -X POST "https://api.telegram.org/bot$BOT_TOKEN/setWebhook" -H "Content-Type: application/json" --data-raw "{\"url\":\"$WORKER_URL/telegram/webhook\",\"secret_token\":\"$SECRET\",\"drop_pending_updates\":true}")
-            echo "$RESPONSE"
-            if echo "$RESPONSE" | grep -q '"ok":true'; then break; fi
-            if echo "$RESPONSE" | grep -q '"error_code":429'; then sleep 2; elif echo "$RESPONSE" | grep -q 'Failed to resolve host'; then sleep 5; else exit 1; fi
-            if [ "$attempt" = "5" ]; then
-              echo "Telegram webhook configuration failed after retries."
-              exit 1
-            fi
-          done
-          echo "### ✅ Telegram webhook configured" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Webhook:** $WORKER_URL/telegram/webhook" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Configure Telegram command menu
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        run: |
           set -e
-          DEFAULT='{"commands":[{"command":"start","description":"Открыть Wild East Club"}]}'
-          curl -sS -X POST "https://api.telegram.org/bot$BOT_TOKEN/setMyCommands" -H "Content-Type: application/json" --data-raw "$DEFAULT" | tee commands-default.json
-          grep -q '"ok":true' commands-default.json
-          for ADMIN_ID in 323262204 462776734; do
-            PAYLOAD=$(printf '{"scope":{"type":"chat","chat_id":%s},"commands":[{"command":"start","description":"Открыть Wild East Club"},{"command":"admin","description":"Административная панель"}]}' "$ADMIN_ID")
-            curl -sS -X POST "https://api.telegram.org/bot$BOT_TOKEN/setMyCommands" -H "Content-Type: application/json" --data-raw "$PAYLOAD" | tee "commands-$ADMIN_ID.json"
-            grep -q '"ok":true' "commands-$ADMIN_ID.json"
-          done
-          echo "Telegram command menu configured"
+          SECRET=$(printf '%s' "$BOT_TOKEN" | openssl dgst -sha256 -hmac "webhook-secret" -binary | xxd -p -c 256)
+          RESPONSE=$(curl -fsS -X POST "https://api.telegram.org/bot$BOT_TOKEN/setWebhook"             -H "Content-Type: application/json"             --data-raw "{\"url\":\"$WORKER_URL/telegram/webhook\",\"secret_token\":\"$SECRET\",\"drop_pending_updates\":true}")
+          echo "$RESPONSE"
+          echo "$RESPONSE" | grep -q '"ok":true'
+
       - name: Verify Telegram webhook
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           WORKER_URL: ${{ env.WORKER_URL }}
         run: |
-          INFO=$(curl -sS "https://api.telegram.org/bot$BOT_TOKEN/getWebhookInfo")
+          set -e
+          INFO=$(curl -fsS "https://api.telegram.org/bot$BOT_TOKEN/getWebhookInfo")
           echo "$INFO"
-          echo "$INFO" | grep -q '"ok":true' || exit 1
-          WEBHOOK_URL=$(printf '%s' "$INFO" | sed -n 's/.*"url":"\([^"]*\)".*/\1/p')
-          PENDING=$(printf '%s' "$INFO" | sed -n 's/.*"pending_update_count":\([0-9]*\).*/\1/p')
-          LAST_ERROR=$(printf '%s' "$INFO" | sed -n 's/.*"last_error_message":"\([^"]*\)".*/\1/p')
-          echo "Webhook URL: $WEBHOOK_URL"
-          echo "Pending updates: $PENDING"
-          if [ -n "$LAST_ERROR" ]; then echo "Last Telegram error: $LAST_ERROR"; else echo "Last Telegram error: none"; fi
+          echo "$INFO" | grep -q '"ok":true'
           EXPECTED="$WORKER_URL/telegram/webhook"
-          if [ "$WEBHOOK_URL" != "$EXPECTED" ]; then
-            echo "Webhook URL mismatch."
-            echo "Expected: $EXPECTED"
-            exit 1
-          fi
-          echo "### 🔎 Telegram webhook verified" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Webhook URL:** $WEBHOOK_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Pending updates:** $PENDING" >> "$GITHUB_STEP_SUMMARY"
-          if [ -n "$LAST_ERROR" ]; then echo "**Last Telegram error:** $LAST_ERROR" >> "$GITHUB_STEP_SUMMARY"; else echo "**Last Telegram error:** none" >> "$GITHUB_STEP_SUMMARY"; fi
+          ACTUAL=$(printf '%s' "$INFO" | sed -n 's/.*"url":"\\([^"]*\\)".*/\\1/p')
+          test "$ACTUAL" = "$EXPECTED"
+
+      - name: Verify live API
+        env:
+          WORKER_URL: ${{ env.WORKER_URL }}
+        run: |
+          set -e
+          HTTP_CODE=$(curl -sS -o api-response.json -w "%{http_code}" "$WORKER_URL/api/events")
+          cat api-response.json
+          test "$HTTP_CODE" = "200"
+          {
+            echo "### ✅ Live API check passed"
+            echo ""
+            echo "**GET /api/events:** HTTP $HTTP_CODE"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify live Mini App pages
         env:
           WORKER_URL: ${{ env.WORKER_URL }}
         run: |
           set -e
-          curl -fsSL -H "Cache-Control: no-cache" -o tourist.html "$WORKER_URL/?v=$GITHUB_SHA"
-          curl -fsSL -H "Cache-Control: no-cache" -o admin.html "$WORKER_URL/admin.html?v=$GITHUB_SHA"
-          echo "Tourist title:"; grep -o '<title>[^<]*</title>' tourist.html | head -n 1
-          echo "Admin response:"; head -c 400 admin.html; echo
-          echo "Admin title:"; grep -o '<title>.*</title>' admin.html | head -n 1
+          curl -fsSL -H "Cache-Control: no-cache" "$WORKER_URL/?v=$GITHUB_SHA" -o tourist.html
+          curl -fsSL -H "Cache-Control: no-cache" "$WORKER_URL/admin.html?v=$GITHUB_SHA" -o admin.html
           grep -q '<title>Wild East Club</title>' tourist.html
           grep -q 'Административная панель' admin.html
           if grep -q 'adminTab' tourist.html || grep -q 'Административная панель' tourist.html; then
@@ -294,18 +146,3 @@ jobs:
             exit 1
           fi
           echo "Live Mini App pages: OK"
-      - name: Verify live API
-        env:
-          WORKER_URL: ${{ env.WORKER_URL }}
-        run: |
-          echo "Testing $WORKER_URL/api/events"
-          HTTP_CODE=$(curl -sS -o api-response.json -w "%{http_code}" "$WORKER_URL/api/events")
-          echo "HTTP status: $HTTP_CODE"
-          cat api-response.json
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Live API check failed."
-            exit 1
-          fi
-          echo "### ✅ Live API check passed" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**GET /api/events:** HTTP $HTTP_CODE" >> "$GITHUB_STEP_SUMMARY"
