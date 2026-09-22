@@ -1,12 +1,12 @@
 CREATE TABLE IF NOT EXISTS routes (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,type TEXT DEFAULT 'sup',start_point TEXT,finish_point TEXT,description TEXT,duration TEXT,default_price INTEGER DEFAULT 0,image_key TEXT,status TEXT DEFAULT 'active');
-CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT,route_id INTEGER,event_date TEXT NOT NULL,event_time TEXT NOT NULL,price INTEGER NOT NULL,max_places INTEGER DEFAULT 30,free_places INTEGER DEFAULT 30,meeting_point TEXT,status TEXT DEFAULT 'active',template_id INTEGER,image_key TEXT,type TEXT DEFAULT 'sup',FOREIGN KEY(route_id) REFERENCES routes(id),FOREIGN KEY(template_id) REFERENCES event_templates(id));
+CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT,route_id INTEGER,event_date TEXT NOT NULL,event_time TEXT NOT NULL,price INTEGER NOT NULL,max_places INTEGER DEFAULT 30,free_places INTEGER DEFAULT 30,meeting_point TEXT,status TEXT DEFAULT 'active',template_id INTEGER,image_key TEXT,type TEXT DEFAULT 'sup',FOREIGN KEY(route_id) REFERENCES routes(id),FOREIGN KEY(template_id) REFERENCES event_templates(id));
 CREATE TABLE IF NOT EXISTS bookings (id INTEGER PRIMARY KEY AUTOINCREMENT,event_id INTEGER,telegram_id INTEGER,full_name TEXT NOT NULL,phone TEXT NOT NULL,adults INTEGER DEFAULT 1,children INTEGER DEFAULT 0,own_sup INTEGER DEFAULT 0,source TEXT,status TEXT DEFAULT 'new',comment TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(event_id) REFERENCES events(id));
 CREATE TABLE IF NOT EXISTS admins (telegram_id INTEGER PRIMARY KEY,role TEXT DEFAULT 'admin',permissions TEXT DEFAULT '');
 CREATE INDEX IF NOT EXISTS idx_events_status_date ON events(status,event_date,event_time);
 CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_duplicate ON bookings(event_id,full_name,phone);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_active_person ON bookings(event_id,lower(trim(full_name)),phone) WHERE status NOT IN ('cancelled','canceled');
-CREATE TABLE IF NOT EXISTS event_templates (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,event_time TEXT NOT NULL,price INTEGER NOT NULL,max_places INTEGER DEFAULT 30,meeting_point TEXT,status TEXT DEFAULT 'active');
+CREATE TABLE IF NOT EXISTS event_templates (id INTEGER PRIMARY KEY AUTOINCREMENT,type TEXT DEFAULT 'sup',name TEXT NOT NULL,event_time TEXT NOT NULL,price INTEGER NOT NULL,max_places INTEGER DEFAULT 30,meeting_point TEXT,status TEXT DEFAULT 'active');
 CREATE TABLE IF NOT EXISTS route_templates (route_id INTEGER NOT NULL,template_id INTEGER NOT NULL,PRIMARY KEY(route_id,template_id),FOREIGN KEY(route_id) REFERENCES routes(id),FOREIGN KEY(template_id) REFERENCES event_templates(id));
 CREATE INDEX IF NOT EXISTS idx_event_templates_status ON event_templates(status);
 CREATE INDEX IF NOT EXISTS idx_route_templates_route ON route_templates(route_id);
