@@ -1,14 +1,17 @@
-# Wild East Club Bot
+# wild east club — Telegram Mini App
 
-Telegram-бот для автоматизации мероприятий Wild East Club.
+Cloudflare Workers + D1 приложение для управления мероприятиями Wild East Club.
 
-## Возможности
+## Структура
 
-- Просмотр мероприятий
-- Запись на САП-сплавы
-- Панель организатора
-- Управление маршрутами
-- Управление ценами
-- Отчёты
+- `worker/` — Cloudflare Worker, API и D1 schema.
+- `miniapp/` — туристическая Mini App и админ-панель.
+- `.github/workflows/` — автоматический деплой и подготовка D1.
 
-Версия проекта: v0.1
+## Деплой
+
+Рабочая ветка: `feature/mini-app-cloudflare-2026-09-18`.
+
+Worker: `wild-east-club.spectran186.workers.dev`
+
+Старый Python/Render-бот удалён из рабочей ветки и больше не используется.
