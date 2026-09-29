@@ -11,6 +11,12 @@ async function ctx(request,env){const raw=request.headers.get("X-Telegram-Init-D
 async function routes(env){const n=Number((await env.DB.prepare("SELECT COUNT(*) n FROM routes WHERE status='active'").first())?.n||0);if(n===0){const seed=[["Кия — Перяславка → Гродеково","sup","Перяславка","Гродеково","Спокойный сплав по лесной части реки Кия","3 часа",2500],["Кия — Гродеково → Могилёвка","sup","Гродеково","Могилёвка","Живописный маршрут по реке Кия","4 часа",2500],["Амур — закат","sup","Амуркабель","Ерофей","Закатный SUP по живописным протокам Амура","2 часа",1500],["Хехцир пешие маршруты","hiking","Хехцир","Хехцир","Пешие маршруты по лесу Хехцира","3–5 часов",1500]];for(const x of seed)await env.DB.prepare("INSERT INTO routes(title,type,start_point,finish_point,description,duration,default_price,status) VALUES(?,?,?,?,?,?,?,'active')").bind(...x).run()}else{const exists=await env.DB.prepare("SELECT 1 FROM routes WHERE title=? AND status='active'").bind("Хехцир пешие маршруты").first();if(!exists)await env.DB.prepare("INSERT INTO routes(title,type,start_point,finish_point,description,duration,default_price,status) VALUES(?,?,?,?,?,?,?,'active')").bind("Хехцир пешие маршруты","hiking","Хехцир","Хехцир","Пешие маршруты по лесу Хехцира","3–5 часов",1500).run()}return (await env.DB.prepare("SELECT id,title,type,start_point,finish_point,description,duration,default_price,image_key FROM routes WHERE status='active' ORDER BY id").all()).results||[]}
 async function events(env,all=false){const q=all?"SELECT e.*,e.title event_title,r.title route_title,r.type route_type,r.start_point,r.finish_point,r.image_key route_image_key,t.name template_name FROM events e LEFT JOIN routes r ON r.id=e.route_id LEFT JOIN event_templates t ON t.id=e.template_id WHERE e.status='active' ORDER BY e.event_date,e.event_time":"SELECT e.*,r.title route_title,r.type route_type,r.start_point,r.finish_point,r.image_key route_image_key,t.name template_name,MAX(0,e.max_places-(SELECT COALESCE(SUM(1+CASE WHEN e2.type='hiking' THEN COALESCE(b.children,0) ELSE 0 END),0) FROM bookings b JOIN events e2 ON e2.id=b.event_id WHERE b.event_id=e.id AND b.status='confirmed')) free_places FROM events e LEFT JOIN routes r ON r.id=e.route_id LEFT JOIN event_templates t ON t.id=e.template_id WHERE e.status='active' GROUP BY e.id ORDER BY e.event_date,e.event_time";return (await env.DB.prepare(q).all()).results||[]}
 async function notify(env,text){if(!env.BOT_TOKEN)return;const ids=String(env.ADMIN_IDS||env.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean);for(const id of ids)await fetch("https://api.telegram.org/bot"+env.BOT_TOKEN+"/sendMessage",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:Number(id),text})}).catch(()=>{})}
+async function setMiniAppMenuButton(env){
+  if(!env.BOT_TOKEN)return;
+  const appUrl=String(env.MINIAPP_URL||"").trim();
+  if(!appUrl)return;
+  await fetch("https://api.telegram.org/bot"+env.BOT_TOKEN+"/setChatMenuButton",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({menu_button:{type:"web_app",text:"Открыть приложение",web_app:{url:appUrl}}})}).catch(()=>{});
+}
 async function telegramSend(env,chatId,text,replyMarkup=null){
   if(!env.BOT_TOKEN)return;
   const body={chat_id:Number(chatId),text};
@@ -40,8 +46,9 @@ async function handleTelegramWebhook(request,env){
   const text=String(message.text||"");
   if(/^\/start(?:@\w+)?(?:\s|$)/i.test(text)){
     const appUrl=String(env.MINIAPP_URL||new URL(request.url).origin);
+    await setMiniAppMenuButton(env);
     await telegramSend(env,chatId,
-      "🌊 Добро пожаловать в Wild East Club!\n\nСтирая границы, создавая моменты.\n\nОткройте приложение 👇",
+      "🌊 Wild East Club\n\nПриложение готово — нажмите «Открыть Wild East Club».",
       {inline_keyboard:[[{text:"🚀 Открыть Wild East Club",web_app:{url:appUrl}}]]}
     );
   }else if(/^\/channelpost(?:@\w+)?(?:\s|$)/i.test(text)){
