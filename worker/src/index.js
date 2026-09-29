@@ -54,7 +54,7 @@ async function handleTelegramWebhook(request,env){
       await telegramSend(env,chatId,"Формат:\n/channelpost <текст>\n\nПо умолчанию кнопка открывает мероприятия.\nДля конкретного раздела:\n/channelpost sup <текст>\n/channelpost hiking <текст>");
       return json({ok:true});
     }
-    const m=raw.match(/^(sup|hiking|events)\\s+([\\s\\S]+)$/i);
+    const m=raw.match(/^(sup|hiking|events)\s+([\s\S]+)$/i);
     const start=(m?.[1]||"events").toLowerCase();
     const postText=m?.[2]?.trim()||raw;
     const channel=String(env.CHANNEL_ID||"@wild_east_club").trim();
@@ -62,7 +62,7 @@ async function handleTelegramWebhook(request,env){
     const resp=await fetch("https://api.telegram.org/bot"+env.BOT_TOKEN+"/sendMessage",{
       method:"POST",
       headers:{"content-type":"application/json"},
-      body:JSON.stringify({chat_id:channel,text:postText,reply_markup:{inline_keyboard:[[{text:"🏄 Открыть Wild East Club",url:appLink}]]}})
+      body:JSON.stringify({chat_id:channel,text:postText,reply_markup:{inline_keyboard:[[{text:start==="hiking"?"🥾 Открыть Wild East Club":"🏄 Открыть Wild East Club",url:appLink}]]}})
     });
     if(resp.ok)await telegramSend(env,chatId,"✅ Пост опубликован в "+channel+"\nКнопка: "+appLink);
     else{
