@@ -44,6 +44,31 @@ async function handleTelegramWebhook(request,env){
       "🌊 Добро пожаловать в Wild East Club!\n\nСтирая границы, создавая моменты.\n\nОткройте приложение 👇",
       {inline_keyboard:[[{text:"🚀 Открыть Wild East Club",web_app:{url:appUrl}}]]}
     );
+  }else if(/^\/channelpost(?:@\w+)?(?:\s|$)/i.test(text)){
+    const userId=message.from?.id;
+    const ids=String(env.ADMIN_IDS||env.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean);
+    const isAdmin=ids.includes(String(userId))||(userId&&!!(await env.DB.prepare("SELECT 1 FROM admins WHERE telegram_id=?").bind(userId).first()));
+    if(!isAdmin){await telegramSend(env,chatId,"⛔ Нет доступа.");return json({ok:true});}
+    const raw=String(text).replace(/^\/channelpost(?:@\w+)?\s*/i,"").trim();
+    if(!raw){
+      await telegramSend(env,chatId,"Формат:\n/channelpost <текст>\n\nПо умолчанию кнопка открывает мероприятия.\nДля конкретного раздела:\n/channelpost sup <текст>\n/channelpost hiking <текст>");
+      return json({ok:true});
+    }
+    const m=raw.match(/^(sup|hiking|events)\\s+([\\s\\S]+)$/i);
+    const start=(m?.[1]||"events").toLowerCase();
+    const postText=m?.[2]?.trim()||raw;
+    const channel=String(env.CHANNEL_ID||"@wild_east_club").trim();
+    const appLink="https://t.me/weclub_bot?startapp="+encodeURIComponent(start);
+    const resp=await fetch("https://api.telegram.org/bot"+env.BOT_TOKEN+"/sendMessage",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({chat_id:channel,text:postText,reply_markup:{inline_keyboard:[[{text:"🏄 Открыть Wild East Club",url:appLink}]]}})
+    });
+    if(resp.ok)await telegramSend(env,chatId,"✅ Пост опубликован в "+channel+"\nКнопка: "+appLink);
+    else{
+      const err=await resp.text().catch(()=>"");
+      await telegramSend(env,chatId,"❌ Не удалось опубликовать пост. Проверьте, что бот добавлен администратором канала и имеет право публиковать сообщения.\n"+err.slice(0,300));
+    }
   }else if(/^\/admin(?:@\w+)?(?:\s|$)/i.test(text)){
     const userId=message.from?.id;
     const ids=String(env.ADMIN_IDS||env.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean);for(const id of ids){await env.DB.prepare("INSERT OR IGNORE INTO admins(telegram_id,role) VALUES(?,?)").bind(Number(id),"admin").run()}const isAdmin=ids.includes(String(userId))||(userId&&!!(await env.DB.prepare("SELECT 1 FROM admins WHERE telegram_id=?").bind(userId).first()));
